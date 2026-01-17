@@ -47,7 +47,7 @@ export interface DbReport {
   child_id: string;
   session_ids: string[];
   report_data: DiagnosticReport;
-  source: 'gemini' | 'fallback';
+  source: string; // 'cerebras' | 'groq' | 'gemini' | 'local-ml' | 'fallback'
   created_at: string;
 }
 
@@ -236,7 +236,7 @@ export async function saveReport(
   childId: string,
   sessionIds: string[],
   reportData: DiagnosticReport,
-  source: 'gemini' | 'fallback'
+  source: string // 'cerebras' | 'groq' | 'gemini' | 'local-ml' | 'fallback'
 ): Promise<DbReport | null> {
   if (!supabase) {
     console.warn('Supabase not configured, skipping report save');
@@ -258,7 +258,9 @@ export async function saveReport(
     .single();
 
   if (error) {
-    console.error('Error saving report:', error);
+    // Log more details about the error
+    console.warn('Supabase save skipped:', error.message || error.code || 'Unknown error');
+    // Don't block - just return null and continue
     return null;
   }
 

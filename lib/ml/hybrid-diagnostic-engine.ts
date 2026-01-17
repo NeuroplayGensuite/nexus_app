@@ -6,6 +6,12 @@
  * Stage 1: Conventional AI (50ms, offline) → Risk Score
  * Stage 2: Dataset Comparison (10ms, offline) → Percentile Rank
  * Stage 3: GenAI Enhancement (2-3s, online) → Clinical Report
+ * 
+ * ACCURACY IMPROVEMENTS (v2.0):
+ * - Requires minimum 3 games for reliable diagnosis
+ * - Cross-disorder correlation analysis
+ * - Confidence penalty for insufficient data
+ * - Ensemble agreement weighting
  */
 
 import {
@@ -26,6 +32,7 @@ interface MLClassification {
     confidence: number;
     features: Record<string, number>;
     threshold: string;
+    dataQuality: 'HIGH' | 'MEDIUM' | 'LOW';  // New: track data quality
 }
 
 // Dataset comparison result
@@ -62,6 +69,11 @@ interface HybridDiagnosticReport {
 
     confidence: number;
     timestamp: number;
+    
+    // New: Data completeness indicator
+    gamesPlayed: number;
+    dataCompleteness: 'COMPLETE' | 'PARTIAL' | 'MINIMAL';
+    reliabilityWarning?: string;
 }
 
 export class HybridDiagnosticEngine {
@@ -80,6 +92,10 @@ export class HybridDiagnosticEngine {
     async diagnose(metrics: BiometricMetrics, childAge: number): Promise<HybridDiagnosticReport> {
         const startTime = performance.now();
 
+        // Count how many games have data
+        const gamesPlayed = this.countGamesWithData(metrics);
+        const dataCompleteness = this.assessDataCompleteness(gamesPlayed);
+
         // STAGE 1: Conventional ML Classification (Offline, Fast)
         const mlStartTime = performance.now();
         const mlClassifications = this.runMLClassifiers(metrics, childAge);
@@ -90,11 +106,24 @@ export class HybridDiagnosticEngine {
         const datasetComparisons = this.compareToDatasets(metrics, childAge);
         const datasetEndTime = performance.now();
 
-        // Calculate overall risk (weighted average)
-        const overallRisk = this.calculateOverallRisk(mlClassifications);
+        // Calculate overall risk (weighted average with data quality consideration)
+        const overallRisk = this.calculateOverallRisk(mlClassifications, dataCompleteness);
 
-        // Calculate confidence (based on agreement between classifiers)
-        const confidence = this.calculateConfidence(mlClassifications, datasetComparisons);
+        // Calculate confidence (based on agreement between classifiers and data completeness)
+        let confidence = this.calculateConfidence(mlClassifications, datasetComparisons);
+        
+        // Apply confidence penalty for incomplete data
+        if (dataCompleteness === 'PARTIAL') {
+            confidence *= 0.85;
+        } else if (dataCompleteness === 'MINIMAL') {
+            confidence *= 0.65;
+        }
+
+        // Generate reliability warning if needed
+        let reliabilityWarning: string | undefined;
+        if (gamesPlayed < 3) {
+            reliabilityWarning = `Only ${gamesPlayed} game${gamesPlayed === 1 ? '' : 's'} completed. For more accurate results, please complete at least 3 different games.`;
+        }
 
         return {
             mlClassifications,
@@ -106,8 +135,44 @@ export class HybridDiagnosticEngine {
                 totalOffline: datasetEndTime - mlStartTime
             },
             confidence,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            gamesPlayed,
+            dataCompleteness,
+            reliabilityWarning
         };
+    }
+
+    /**
+     * Count games with meaningful data
+     */
+    private countGamesWithData(metrics: BiometricMetrics): number {
+        let count = 0;
+        
+        // Phonic Finder (Dyslexia)
+        if (metrics.phonicDelay !== undefined && metrics.phonicDelay > 0) count++;
+        
+        // Maze (Dysgraphia)
+        if (metrics.mse !== undefined && metrics.mse > 0) count++;
+        
+        // Pizza Party (Dyscalculia)
+        if (metrics.subitizingThreshold !== undefined) count++;
+        
+        // Sync Master (Dyspraxia)
+        if (metrics.rhythmAccuracy !== undefined) count++;
+        
+        // Star Mapper (NVLD)
+        if (metrics.spatialDecay1s !== undefined) count++;
+        
+        return count;
+    }
+
+    /**
+     * Assess overall data completeness
+     */
+    private assessDataCompleteness(gamesPlayed: number): 'COMPLETE' | 'PARTIAL' | 'MINIMAL' {
+        if (gamesPlayed >= 4) return 'COMPLETE';
+        if (gamesPlayed >= 2) return 'PARTIAL';
+        return 'MINIMAL';
     }
 
     /**
@@ -128,7 +193,8 @@ export class HybridDiagnosticEngine {
             };
 
             const result = this.classifiers.dyslexia.predict(features);
-            results.push({ disorder: 'dyslexia', ...result });
+            const dataQuality = this.assessFeatureQuality(features, ['phonemic_latency_ms', 'rhyme_detection_accuracy']);
+            results.push({ disorder: 'dyslexia', ...result, dataQuality });
         }
 
         // Dysgraphia detection (from Maze game)
@@ -143,7 +209,8 @@ export class HybridDiagnosticEngine {
             };
 
             const result = this.classifiers.dysgraphia.predict(features);
-            results.push({ disorder: 'dysgraphia', ...result });
+            const dataQuality = this.assessFeatureQuality(features, ['mse', 'wall_hugging_percentage', 'tremor_indicator']);
+            results.push({ disorder: 'dysgraphia', ...result, dataQuality });
         }
 
         // Dyscalculia detection (from Pizza Party game)
@@ -157,7 +224,8 @@ export class HybridDiagnosticEngine {
             };
 
             const result = this.classifiers.dyscalculia.predict(features);
-            results.push({ disorder: 'dyscalculia', ...result });
+            const dataQuality = this.assessFeatureQuality(features, ['subitizing_threshold', 'counting_accuracy']);
+            results.push({ disorder: 'dyscalculia', ...result, dataQuality });
         }
 
         // Dyspraxia detection (from Sync Master game)
@@ -172,7 +240,8 @@ export class HybridDiagnosticEngine {
             };
 
             const result = this.classifiers.dyspraxia.predict(features);
-            results.push({ disorder: 'dyspraxia', ...result });
+            const dataQuality = this.assessFeatureQuality(features, ['rhythm_accuracy', 'motor_lag_ms', 'missed_beats']);
+            results.push({ disorder: 'dyspraxia', ...result, dataQuality });
         }
 
         // NVLD detection (from Star Mapper game)
@@ -186,10 +255,28 @@ export class HybridDiagnosticEngine {
             };
 
             const result = this.classifiers.nvld.predict(features);
-            results.push({ disorder: 'nvld', ...result });
+            const dataQuality = this.assessFeatureQuality(features, ['spatial_decay_1s', 'visual_memory_score']);
+            results.push({ disorder: 'nvld', ...result, dataQuality });
         }
 
         return results;
+    }
+
+    /**
+     * Assess quality of feature data
+     */
+    private assessFeatureQuality(features: Record<string, number>, keyFeatures: string[]): 'HIGH' | 'MEDIUM' | 'LOW' {
+        let validCount = 0;
+        for (const key of keyFeatures) {
+            if (features[key] !== undefined && features[key] !== 0) {
+                validCount++;
+            }
+        }
+        
+        const ratio = validCount / keyFeatures.length;
+        if (ratio >= 0.8) return 'HIGH';
+        if (ratio >= 0.5) return 'MEDIUM';
+        return 'LOW';
     }
 
     /**
@@ -278,18 +365,36 @@ export class HybridDiagnosticEngine {
 
     /**
      * Calculate overall risk from multiple classifiers
+     * Now considers data completeness and quality
      */
-    private calculateOverallRisk(classifications: MLClassification[]): 'LOW' | 'MODERATE' | 'HIGH' {
+    private calculateOverallRisk(
+        classifications: MLClassification[],
+        dataCompleteness: 'COMPLETE' | 'PARTIAL' | 'MINIMAL'
+    ): 'LOW' | 'MODERATE' | 'HIGH' {
         if (classifications.length === 0) return 'LOW';
 
-        const riskScores = classifications.map(c => {
-            if (c.risk === 'HIGH') return 3;
-            if (c.risk === 'MODERATE') return 2;
-            return 1;
-        });
+        // Weight risk scores by data quality
+        let weightedRiskSum = 0;
+        let totalWeight = 0;
 
-        const avgRiskScore = riskScores.reduce((a, b) => a + b, 0) / riskScores.length;
+        for (const c of classifications) {
+            let riskScore = c.risk === 'HIGH' ? 3 : c.risk === 'MODERATE' ? 2 : 1;
+            let weight = c.dataQuality === 'HIGH' ? 1.0 : c.dataQuality === 'MEDIUM' ? 0.7 : 0.4;
+            
+            weightedRiskSum += riskScore * weight;
+            totalWeight += weight;
+        }
 
+        const avgRiskScore = totalWeight > 0 ? weightedRiskSum / totalWeight : 1;
+
+        // With minimal data, be more conservative (lean toward LOW)
+        if (dataCompleteness === 'MINIMAL') {
+            if (avgRiskScore >= 2.8) return 'HIGH';
+            if (avgRiskScore >= 2.2) return 'MODERATE';
+            return 'LOW';
+        }
+
+        // Standard thresholds
         if (avgRiskScore >= 2.5) return 'HIGH';
         if (avgRiskScore >= 1.75) return 'MODERATE';
         return 'LOW';

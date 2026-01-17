@@ -160,7 +160,10 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
         };
 
         utterance.onerror = (event) => {
-          console.error('Speech synthesis error:', event.error);
+          // Ignore 'interrupted' errors - these happen when cancel() is called
+          if (event.error !== 'interrupted') {
+            console.error('Speech synthesis error:', event.error);
+          }
           setShowingPhoneme(true);
           audioCueTimeRef.current = Date.now();
         };

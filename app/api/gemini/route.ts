@@ -22,7 +22,7 @@ const TOGETHER_API_URL = 'https://api.together.xyz/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
-const CEREBRAS_MODEL = 'llama3.1-70b';
+const CEREBRAS_MODEL = 'llama-3.3-70b';
 const TOGETHER_MODEL = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo';
 
 // Helper function to call Cerebras AI (FREE UNLIMITED - Now Primary!)
@@ -363,51 +363,51 @@ async function handleReportGeneration(body: {
     );
   }
 
-  // If no API keys configured, use fallback report
-  if (!GROQ_API_KEY && !GEMINI_API_KEY) {
-    console.warn('No AI API keys configured, using fallback report');
-    const fallbackReport = generateFallbackReport(metrics, childAge);
+  // ALWAYS generate fallback first (so we have something to show)
+  const fallbackReport = generateFallbackReport(metrics, childAge);
+
+  // Check if any API keys are configured
+  const hasApiKeys = CEREBRAS_API_KEY || GROQ_API_KEY || TOGETHER_API_KEY || GEMINI_API_KEY;
+  
+  if (!hasApiKeys) {
+    console.log('📋 No AI API keys configured - using local ML report');
     return NextResponse.json({
       report: fallbackReport,
-      source: 'fallback',
-      message: 'Report generated using fallback system (No AI API configured)'
+      source: 'local-ml',
+      message: 'Report generated using local ML analysis'
     });
   }
 
-  // Generate prompt with Hybrid AI (ML + Dataset analysis)
-  const prompt = await generateGeminiPrompt(metrics, childAge, language);
+  // Try AI APIs with short timeout
+  try {
+    // Generate prompt with Hybrid AI (ML + Dataset analysis)
+    const prompt = await generateGeminiPrompt(metrics, childAge, language);
 
-  // Use unified AI with fallback chain
-  const result = await callAI(prompt, 0.7);
+    // Use unified AI with fallback chain (with 10s timeout)
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
+    const result = await Promise.race([callAI(prompt, 0.7), timeoutPromise]);
 
-  if (!result) {
-    // All APIs failed, use fallback
-    console.error('All AI APIs failed, using fallback report');
-    const fallbackReport = generateFallbackReport(metrics, childAge);
-    return NextResponse.json({
-      report: fallbackReport,
-      source: 'fallback',
-      error: 'All AI APIs unavailable, using fallback report'
-    });
+    if (result) {
+      // Parse the response
+      const parsedReport = parseGeminiResponse(result.content);
+
+      if (parsedReport) {
+        console.log('✅ AI report generated successfully via', result.source);
+        return NextResponse.json({
+          report: parsedReport,
+          source: result.source,
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('AI API error:', error);
   }
 
-  // Parse the response
-  const parsedReport = parseGeminiResponse(result.content);
-
-  if (!parsedReport) {
-    // If parsing fails, use fallback
-    const fallbackReport = generateFallbackReport(metrics, childAge);
-    return NextResponse.json({
-      report: fallbackReport,
-      source: 'fallback',
-      rawResponse: result.content,
-      error: 'Failed to parse AI response'
-    });
-  }
-
+  // Return fallback if AI fails
+  console.log('📋 AI unavailable - using local ML report');
   return NextResponse.json({
-    report: parsedReport,
-    source: result.source,
-    rawResponse: result.content
+    report: fallbackReport,
+    source: 'local-ml',
+    message: 'Report generated using local ML analysis'
   });
 }

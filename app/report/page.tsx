@@ -85,6 +85,8 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeWeek, setActiveWeek] = useState(1);
+  const [mounted, setMounted] = useState(false);
+  const [currentDate, setCurrentDate] = useState('');
 
   // Email state
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -92,14 +94,21 @@ export default function ReportPage() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState<{ success: boolean; message: string } | null>(null);
 
-  const metrics = getAggregatedMetrics();
-  const completedGames = new Set(allSessions.map(s => s.gameType));
+  // Only compute these on client after mount to prevent hydration mismatch
+  const metrics = mounted ? getAggregatedMetrics() : {};
+  const completedGames = mounted ? new Set(allSessions.map(s => s.gameType)) : new Set<string>();
+
+  // Handle mounting and date formatting on client only
+  useEffect(() => {
+    setMounted(true);
+    setCurrentDate(new Date().toLocaleDateString('en-IN', { dateStyle: 'long' }));
+  }, []);
 
   useEffect(() => {
-    if (Object.keys(metrics).length > 0 && childProfile) {
+    if (mounted && Object.keys(metrics).length > 0 && childProfile) {
       generateReport();
     }
-  }, []);
+  }, [mounted]);
 
   // Send report via email using Nodemailer API route
   const sendReportEmail = async () => {
@@ -146,9 +155,12 @@ export default function ReportPage() {
     }
   };
 
+  const [reportSource, setReportSource] = useState<string>('');
+  
   const generateReport = async () => {
     setLoading(true);
     setError(null);
+    setReportSource('');
 
     try {
       const response = await fetch('/api/gemini', {
@@ -161,30 +173,36 @@ export default function ReportPage() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate report');
-      }
-
       const data = await response.json();
+      
+      // Always get a report (API returns fallback if AI fails)
       const reportData = data.report as ReportData;
       setReport(reportData);
+      setReportSource(data.source || 'local-ml');
+      
+      // Log the source
+      console.log('📊 Report generated via:', data.source);
 
-      // Save report to Supabase
+      // Save report to Supabase (non-blocking)
       if (isSupabaseConfigured() && childProfile) {
         const sessionIds = allSessions.map(s => s.id);
-        await saveReport(
+        saveReport(
           childProfile.id,
           sessionIds,
           reportData as unknown as DiagnosticReport,
-          data.source || 'fallback'
-        );
-        console.log('✅ Report saved to Supabase');
+          data.source || 'local-ml'
+        ).then(saved => {
+          if (saved) console.log('✅ Report saved to Supabase');
+        }).catch(() => {
+          // Silently ignore - report still works locally
+        });
       }
     } catch (err) {
-      setError(String(err));
-      // Use fallback data for demo
+      console.warn('API call failed, using local report:', err);
+      // Use local fallback if API completely fails
       const fallbackReport = generateLocalReport(metrics);
       setReport(fallbackReport);
+      setReportSource('local-ml');
 
       // Still save fallback report to Supabase
       if (isSupabaseConfigured() && childProfile) {
@@ -193,7 +211,7 @@ export default function ReportPage() {
           childProfile.id,
           sessionIds,
           fallbackReport as unknown as DiagnosticReport,
-          'fallback'
+          'local-ml'
         ).catch(console.error);
       }
     } finally {
@@ -306,7 +324,7 @@ export default function ReportPage() {
             <div className="text-right">
               <p className="text-gray-900 font-bold">{childProfile?.name || 'Player'}</p>
               <p className="text-gray-600">Age: {childProfile?.age || '?'} | Grade: {childProfile?.grade || 'N/A'}</p>
-              <p className="text-gray-500 text-sm">{new Date().toLocaleDateString('en-IN', { dateStyle: 'long' })}</p>
+              <p className="text-gray-500 text-sm">{currentDate}</p>
             </div>
           </div>
         </div>
@@ -320,6 +338,23 @@ export default function ReportPage() {
           <p className="text-gray-500 text-sm mt-1">
             Based on {completedGames.size}/5 games completed
           </p>
+          {reportSource && (
+            <div className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full text-sm ${
+              reportSource.includes('local') || reportSource.includes('fallback')
+                ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
+                : 'bg-green-900/50 text-green-300 border border-green-700'
+            }`}>
+              {reportSource.includes('local') || reportSource.includes('fallback') ? (
+                <>
+                  <span>🧠</span> Local ML Analysis
+                </>
+              ) : (
+                <>
+                  <span>✨</span> AI Enhanced ({reportSource})
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Loading State */}
@@ -341,93 +376,73 @@ export default function ReportPage() {
         {report && !loading && (
           <div className="space-y-6">
             {/* Executive Summary */}
-            <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
-              <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                <span>📝</span> Summary
-              </h2>
-              <p className="text-gray-300 leading-relaxed">
+            <div className="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-2xl p-6 border border-indigo-700/50 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <span>📝</span> Overall Summary
+                </h2>
+                <p className="text-sm text-indigo-100/80 bg-indigo-900/50 px-3 py-1 rounded-full border border-indigo-700/60">Parent-friendly overview</p>
+              </div>
+              <p className="text-gray-200 text-lg leading-relaxed font-medium">
                 {report.executiveSummary}
               </p>
+              {report.findings?.[0]?.dailyLifeImpact && (
+                <p className="mt-3 text-sm text-indigo-100 bg-indigo-900/40 border border-indigo-700/40 rounded-lg px-3 py-2">
+                  In simple words: {report.findings[0].dailyLifeImpact}
+                </p>
+              )}
             </div>
 
-            {/* Findings */}
-            {report.findings.length > 0 && (
-              <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <span>🔍</span> Observations
-                </h2>
-                <div className="space-y-4">
-                  {report.findings.map((finding, idx) => (
-                    <div key={idx} className="bg-slate-700/50 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`px-3 py-1 rounded-full text-white text-sm font-bold ${CONDITION_COLORS[finding.condition] || 'bg-gray-500'}`}>
-                          {CONDITION_LABELS[finding.condition] || finding.condition}
-                        </span>
-                        <span className={`text-sm ${finding.confidence === 'high' ? 'text-red-400' :
-                            finding.confidence === 'medium' ? 'text-yellow-400' : 'text-green-400'
-                          }`}>
-                          {finding.confidence?.toUpperCase() || 'UNKNOWN'} confidence
-                        </span>
-                      </div>
-                      <p className="text-gray-400 text-sm mb-2">
-                        {finding.evidence?.join(', ') || 'No evidence data available'}
-                      </p>
-                      <p className="text-gray-300 text-sm mb-3">
-                        💡 {finding.dailyLifeImpact || 'Impact assessment pending'}
-                      </p>
-                      {/* Kerala XAI Analogy */}
-                      {(finding as { keralaAnalogy?: string }).keralaAnalogy && (
-                        <div className="bg-amber-900/30 rounded-lg p-3 border border-amber-700/50">
-                          <p className="text-amber-200 text-sm italic">
-                            🥥 <strong>In simpler terms:</strong> {(finding as { keralaAnalogy?: string }).keralaAnalogy}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* No Issues Found */}
-            {report.findings.length === 0 && (
-              <div className="bg-green-900/30 rounded-2xl p-6 border border-green-700 text-center">
-                <div className="text-5xl mb-3">🌟</div>
-                <h3 className="text-xl font-bold text-green-400 mb-2">Looking Great!</h3>
-                <p className="text-gray-300">
-                  No significant concerns were detected. Keep up the great work!
-                </p>
-              </div>
-            )}
-
+            {/* Findings - parent friendly */}
             {/* Visual Charts */}
             <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
-              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 <span>📊</span> Performance Overview
               </h2>
-              <div className="grid md:grid-cols-2 gap-6">
+
+              {/* Quick stats */}
+              <div className="grid md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/30 rounded-xl p-4 border border-green-700/40">
+                  <p className="text-green-300 text-xs font-bold uppercase">Games Completed</p>
+                  <p className="text-3xl font-bold text-green-400 mt-1">{completedGames.size}/5</p>
+                  <p className="text-green-200 text-xs mt-1">✨ More data improves accuracy</p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-900/40 to-cyan-900/30 rounded-xl p-4 border border-blue-700/40">
+                  <p className="text-blue-300 text-xs font-bold uppercase">Overall Performance</p>
+                  <p className="text-3xl font-bold text-blue-400 mt-1">{Math.round((completedGames.size / 5) * 100)}%</p>
+                  <p className="text-blue-200 text-xs mt-1">📊 Assessment completeness</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/30 rounded-xl p-4 border border-purple-700/40">
+                  <p className="text-purple-300 text-xs font-bold uppercase">Areas Checked</p>
+                  <p className="text-3xl font-bold text-purple-400 mt-1">{report.findings.length > 0 ? report.findings.length : 0}</p>
+                  <p className="text-purple-200 text-xs mt-1">Focus areas identified</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
                 {/* Radar Chart - Skills Profile */}
-                <div className="bg-slate-700/30 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-gray-300 mb-3 text-center">Skill Areas</h3>
-                  <div className="h-64">
+                <div className="md:col-span-2 bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                  <h3 className="text-sm font-bold text-gray-300 mb-3 text-center">Skill Strengths & Areas for Growth</h3>
+                  <p className="text-xs text-gray-400 text-center mb-3">Outer ring = stronger; inner ring = needs practice</p>
+                  <div className="h-72">
                     <Radar
                       data={{
-                        labels: ['Motor Control', 'Spatial', 'Phonics', 'Numeracy', 'Timing'],
+                        labels: ['Motor Control', 'Spatial Skills', 'Reading & Phonics', 'Math & Numbers', 'Rhythm & Timing'],
                         datasets: [{
-                          label: 'Performance',
+                          label: 'Your Child',
                           data: [
                             Math.max(0, 100 - (metrics.mse ?? 0)),
                             Math.max(0, 100 - (metrics.wallHuggingRatio ?? 0) * 100),
                             Math.max(0, 100 - (metrics.phonemicSlips ?? 0) * 20),
                             (metrics.subitizingThreshold ?? 3) * 20,
-                            metrics.rhythmAccuracy ?? 50,
+                            (metrics.rhythmAccuracy ?? 0.5) * 100,
                           ],
-                          backgroundColor: 'rgba(99, 102, 241, 0.3)',
-                          borderColor: 'rgb(99, 102, 241)',
-                          pointBackgroundColor: 'rgb(99, 102, 241)',
+                          backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                          borderColor: 'rgb(168, 85, 247)',
+                          pointBackgroundColor: 'rgb(168, 85, 247)',
                           pointBorderColor: '#fff',
-                          pointHoverBackgroundColor: '#fff',
-                          pointHoverBorderColor: 'rgb(99, 102, 241)',
+                          pointRadius: 5,
+                          pointHoverRadius: 7,
                         }],
                       }}
                       options={{
@@ -437,48 +452,90 @@ export default function ReportPage() {
                           r: {
                             beginAtZero: true,
                             max: 100,
-                            ticks: { color: '#9CA3AF', stepSize: 20 },
+                            ticks: { color: '#9CA3AF', stepSize: 25, font: { size: 11 } },
                             grid: { color: 'rgba(156, 163, 175, 0.2)' },
                             angleLines: { color: 'rgba(156, 163, 175, 0.2)' },
-                            pointLabels: { color: '#D1D5DB', font: { size: 11 } },
+                            pointLabels: { color: '#D1D5DB', font: { size: 12, weight: 'bold' } },
                           },
                         },
                         plugins: { legend: { display: false } },
                       }}
                     />
                   </div>
+                  <p className="text-xs text-gray-400 text-center mt-2">Higher scores = stronger in that area</p>
                 </div>
 
                 {/* Doughnut Chart - Game Completion */}
-                <div className="bg-slate-700/30 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-gray-300 mb-3 text-center">Games Completed</h3>
-                  <div className="h-64 flex items-center justify-center">
-                    <Doughnut
+                <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                  <h3 className="text-sm font-bold text-gray-300 mb-3 text-center">Assessment Progress</h3>
+                  <div className="h-72 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="relative w-40 h-40 mx-auto mb-4">
+                        <Doughnut
+                          data={{
+                            labels: ['Completed', 'Remaining'],
+                            datasets: [{
+                              data: [completedGames.size, Math.max(0, 5 - completedGames.size)],
+                              backgroundColor: ['#22c55e', '#334155'],
+                              borderWidth: 0,
+                            }],
+                          }}
+                          options={{
+                            cutout: '70%',
+                            plugins: { legend: { display: false } },
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-white">{Math.round((completedGames.size / 5) * 100)}%</p>
+                            <p className="text-xs text-gray-400">done</p>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-gray-300 text-sm">{completedGames.size}/5 games finished</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bar Chart - Focused scores */}
+                <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                  <h3 className="text-sm font-bold text-gray-300 mb-3 text-center">Areas to watch</h3>
+                  <div className="h-72">
+                    <Bar
                       data={{
-                        labels: ['Completed', 'Remaining'],
+                        labels: ['Attention', 'Motor Control', 'Reading', 'Math'],
                         datasets: [{
-                          data: [completedGames.size, 5 - completedGames.size],
-                          backgroundColor: ['rgb(34, 197, 94)', 'rgba(156, 163, 175, 0.3)'],
-                          borderColor: ['rgb(34, 197, 94)', 'rgba(156, 163, 175, 0.3)'],
-                          borderWidth: 1,
+                          label: 'Score (higher is better)',
+                          data: [
+                            Math.max(0, 100 - (metrics.gazeEntropy ?? 0) * 10),
+                            Math.max(0, 100 - (metrics.mse ?? 0)),
+                            Math.max(0, 100 - (metrics.phonemicSlips ?? 0) * 20),
+                            (metrics.subitizingThreshold ?? 3) * 20,
+                          ],
+                          backgroundColor: ['#38bdf8', '#34d399', '#c084fc', '#fbbf24'],
+                          borderRadius: 8,
                         }],
                       }}
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                          legend: {
-                            position: 'bottom',
-                            labels: { color: '#D1D5DB' }
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { color: '#9CA3AF', stepSize: 20 },
+                            grid: { color: 'rgba(148, 163, 184, 0.2)' },
+                          },
+                          x: {
+                            ticks: { color: '#E5E7EB' },
+                            grid: { display: false },
                           },
                         },
-                        cutout: '60%',
+                        plugins: { legend: { display: false } },
                       }}
                     />
                   </div>
-                  <div className="text-center mt-2 text-2xl font-bold text-green-400">
-                    {completedGames.size}/5
-                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-2">Lower bars suggest where to focus practice first</p>
                 </div>
               </div>
             </div>
