@@ -31,22 +31,40 @@ export default function MediaCapture({
     const [audioActive, setAudioActive] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
     const [error, setError] = useState<string | null>(null);
-    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [hasDevices, setHasDevices] = useState<boolean | null>(null);
+    const [hidden, setHidden] = useState(false);
 
+    // Check if devices exist on mount
     useEffect(() => {
         setMounted(true);
+        
+        // Check for available devices
+        const checkDevices = async () => {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                    setHasDevices(false);
+                    return;
+                }
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const hasVideo = devices.some(d => d.kind === 'videoinput');
+                const hasAudio = devices.some(d => d.kind === 'audioinput');
+                setHasDevices(hasVideo || hasAudio);
+                
+                if (!hasVideo && !hasAudio) {
+                    console.log('📷 No camera/mic detected - media capture disabled');
+                }
+            } catch {
+                setHasDevices(false);
+            }
+        };
+        
+        checkDevices();
+        
         return () => {
-            // Cleanup on unmount
             stopAllMedia();
         };
     }, []);
-
-    // Auto-start if requested
-    useEffect(() => {
-        if (mounted && autoStart && !isCapturing) {
-            handleStartMedia();
-        }
-    }, [mounted, autoStart]);
 
     // Audio level monitoring
     useEffect(() => {
@@ -72,26 +90,18 @@ export default function MediaCapture({
     }, [audioActive]);
 
     const stopAllMedia = useCallback(() => {
-        // Stop video tracks
         if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => {
-                track.stop();
-            });
+            streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
-
-        // Clear video element
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
-
-        // Close audio context
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close().catch(() => {});
             audioContextRef.current = null;
         }
         analyserRef.current = null;
-
         setWebcamActive(false);
         setAudioActive(false);
         setIsCapturing(false);
@@ -100,38 +110,49 @@ export default function MediaCapture({
 
     const handleStartMedia = useCallback(async () => {
         setError(null);
-        setPermissionDenied(false);
 
         try {
-            // Request both video and audio
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 320 },
-                    height: { ideal: 240 },
-                    facingMode: 'user',
-                },
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                },
-            });
+            // Try video + audio first
+            let stream: MediaStream;
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
+                    audio: { echoCancellation: true, noiseSuppression: true },
+                });
+            } catch {
+                // Try video only
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
+                        audio: false,
+                    });
+                } catch {
+                    // Try audio only
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: { echoCancellation: true, noiseSuppression: true },
+                    });
+                }
+            }
 
             streamRef.current = stream;
 
-            // Set up video
-            if (videoRef.current) {
+            // Set up video if available
+            const videoTracks = stream.getVideoTracks();
+            if (videoTracks.length > 0 && videoRef.current) {
                 videoRef.current.srcObject = stream;
                 try {
                     await videoRef.current.play();
                     setWebcamActive(true);
                     onWebcamReady?.();
                     console.log(`📹 Camera started for: ${gameType}`);
-                } catch (playErr) {
-                    console.error('Video play error:', playErr);
+                } catch (e) {
+                    console.warn('Video play failed:', e);
                 }
             }
 
-            // Set up audio analysis
+            // Set up audio if available
             const audioTracks = stream.getAudioTracks();
             if (audioTracks.length > 0) {
                 const audioContext = new AudioContext();
@@ -150,20 +171,18 @@ export default function MediaCapture({
             setIsCapturing(true);
 
         } catch (err: unknown) {
-            console.error('Media error:', err);
-            
             const errorObj = err as { name?: string; message?: string };
             
-            if (errorObj.name === 'NotAllowedError' || errorObj.name === 'PermissionDeniedError') {
-                setPermissionDenied(true);
-                setError('Camera/mic permission denied. Please allow access.');
+            if (errorObj.name === 'NotAllowedError') {
+                setError('Permission denied. Click 🔒 in address bar to allow.');
             } else if (errorObj.name === 'NotFoundError') {
-                setError('No camera or microphone found.');
+                setError('No camera/mic found on this device.');
             } else if (errorObj.name === 'NotReadableError') {
-                setError('Camera is in use by another app.');
+                setError('Device in use by another app.');
             } else {
-                setError(errorObj.message || 'Failed to start media');
+                setError('Could not access media devices.');
             }
+            console.warn('Media access error:', errorObj.name);
         }
     }, [gameType, onWebcamReady, onAudioReady]);
 
@@ -172,7 +191,18 @@ export default function MediaCapture({
         console.log(`⏹️ Media stopped for: ${gameType}`);
     }, [stopAllMedia, gameType]);
 
-    if (!mounted) return null;
+    // Don't render anything if:
+    // - Not mounted yet
+    // - No devices available
+    // - User closed the widget
+    if (!mounted || hasDevices === false || hidden) {
+        return null;
+    }
+
+    // Still checking for devices
+    if (hasDevices === null) {
+        return null;
+    }
 
     // Minimized view
     if (minimized && isCapturing) {
@@ -182,7 +212,7 @@ export default function MediaCapture({
                 className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-slate-800/90 backdrop-blur border border-slate-600 rounded-full shadow-lg hover:bg-slate-700 transition ${className}`}
             >
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-xs text-white">Recording</span>
+                <span className="text-xs text-white">REC</span>
                 {webcamActive && <span>📷</span>}
                 {audioActive && <span>🎤</span>}
             </button>
@@ -205,15 +235,27 @@ export default function MediaCapture({
                         </span>
                     )}
                 </div>
-                {isCapturing && (
+                <div className="flex items-center gap-1">
+                    {isCapturing && (
+                        <button
+                            onClick={() => setMinimized(true)}
+                            className="p-1 text-gray-400 hover:text-white text-xs"
+                            title="Minimize"
+                        >
+                            ─
+                        </button>
+                    )}
                     <button
-                        onClick={() => setMinimized(true)}
-                        className="p-1 text-gray-400 hover:text-white"
-                        title="Minimize"
+                        onClick={() => {
+                            stopAllMedia();
+                            setHidden(true);
+                        }}
+                        className="p-1 text-gray-400 hover:text-red-400 text-xs"
+                        title="Close"
                     >
-                        ─
+                        ✕
                     </button>
-                )}
+                </div>
             </div>
 
             {/* Video Preview */}
@@ -225,20 +267,25 @@ export default function MediaCapture({
                         muted
                         playsInline
                         className={`w-full h-auto transform scale-x-[-1] ${webcamActive ? 'block' : 'hidden'}`}
-                        style={{ maxHeight: '180px' }}
+                        style={{ maxHeight: '150px' }}
                     />
-                    {!webcamActive && (
-                        <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
-                            📷 Camera off
+                    {!webcamActive && !isCapturing && (
+                        <div className="h-24 flex items-center justify-center text-gray-500 text-sm">
+                            📷 Click Start
+                        </div>
+                    )}
+                    {!webcamActive && isCapturing && (
+                        <div className="h-24 flex items-center justify-center text-gray-500 text-sm">
+                            🎤 Audio only
                         </div>
                     )}
                     {webcamActive && (
                         <>
-                            <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600/80 rounded text-xs text-white flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-red-600/80 rounded text-xs text-white flex items-center gap-1">
+                                <span className="w-1 h-1 bg-white rounded-full animate-pulse" />
                                 LIVE
                             </div>
-                            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-blue-600/80 rounded text-xs text-white">
+                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-blue-600/80 rounded text-xs text-white">
                                 {gameType}
                             </div>
                         </>
@@ -247,7 +294,7 @@ export default function MediaCapture({
             )}
 
             {/* Controls */}
-            <div className="p-3 space-y-3">
+            <div className="p-2 space-y-2">
                 {/* Status */}
                 <div className="flex items-center justify-between text-xs">
                     <span className={webcamActive ? 'text-green-400' : 'text-gray-500'}>
@@ -260,32 +307,21 @@ export default function MediaCapture({
 
                 {/* Audio Meter */}
                 {audioActive && (
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-400">
-                            <span>Audio</span>
-                            <span>{(audioLevel * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                                className={`h-full transition-all duration-75 ${
-                                    audioLevel > 0.7 ? 'bg-red-500' :
-                                    audioLevel > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
-                                }`}
-                                style={{ width: `${audioLevel * 100}%` }}
-                            />
-                        </div>
+                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                            className={`h-full transition-all duration-75 ${
+                                audioLevel > 0.7 ? 'bg-red-500' :
+                                audioLevel > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.max(audioLevel * 100, 5)}%` }}
+                        />
                     </div>
                 )}
 
                 {/* Error */}
                 {error && (
-                    <div className="text-xs text-red-400 bg-red-900/30 rounded p-2">
+                    <div className="text-xs text-amber-400 bg-amber-900/30 rounded p-1.5">
                         ⚠️ {error}
-                        {permissionDenied && (
-                            <div className="mt-1 text-gray-400">
-                                Click the camera icon in your browser&apos;s address bar to allow access.
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -294,23 +330,23 @@ export default function MediaCapture({
                     {!isCapturing ? (
                         <button
                             onClick={handleStartMedia}
-                            className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1"
+                            className="flex-1 px-2 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-lg transition"
                         >
                             ▶️ Start
                         </button>
                     ) : (
                         <button
                             onClick={handleStopMedia}
-                            className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1"
+                            className="flex-1 px-2 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition"
                         >
                             ⏹️ Stop
                         </button>
                     )}
                 </div>
 
-                {/* Privacy */}
+                {/* Info */}
                 <div className="text-center text-xs text-gray-500">
-                    🔒 Video not saved - local only
+                    🔒 Optional • Not saved
                 </div>
             </div>
         </div>
