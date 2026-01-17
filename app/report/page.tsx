@@ -85,7 +85,7 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeWeek, setActiveWeek] = useState(1);
-  
+
   // Email state
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
@@ -104,10 +104,10 @@ export default function ReportPage() {
   // Send report via email using Nodemailer API route
   const sendReportEmail = async () => {
     if (!emailAddress || !report) return;
-    
+
     setEmailSending(true);
     setEmailStatus(null);
-    
+
     try {
       const response = await fetch('/api/send-report', {
         method: 'POST',
@@ -124,10 +124,10 @@ export default function ReportPage() {
 
       const result = await response.json();
       console.log('Email result:', result);
-      
+
       if (result.success) {
-        const message = result.demo 
-          ? `Demo mode: ${result.message}` 
+        const message = result.demo
+          ? `Demo mode: ${result.message}`
           : `Report sent to ${emailAddress}! Check your inbox.`;
         setEmailStatus({ success: true, message });
         setTimeout(() => {
@@ -168,13 +168,13 @@ export default function ReportPage() {
       const data = await response.json();
       const reportData = data.report as ReportData;
       setReport(reportData);
-      
+
       // Save report to Supabase
       if (isSupabaseConfigured() && childProfile) {
         const sessionIds = allSessions.map(s => s.id);
         await saveReport(
-          childProfile.id, 
-          sessionIds, 
+          childProfile.id,
+          sessionIds,
           reportData as unknown as DiagnosticReport,
           data.source || 'fallback'
         );
@@ -185,13 +185,13 @@ export default function ReportPage() {
       // Use fallback data for demo
       const fallbackReport = generateLocalReport(metrics);
       setReport(fallbackReport);
-      
+
       // Still save fallback report to Supabase
       if (isSupabaseConfigured() && childProfile) {
         const sessionIds = allSessions.map(s => s.id);
         await saveReport(
-          childProfile.id, 
-          sessionIds, 
+          childProfile.id,
+          sessionIds,
           fallbackReport as unknown as DiagnosticReport,
           'fallback'
         ).catch(console.error);
@@ -265,7 +265,7 @@ export default function ReportPage() {
       <div className="max-w-4xl mx-auto px-4 print:max-w-none print:px-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8 print:hidden">
-          <Link 
+          <Link
             href="/"
             className="inline-flex items-center text-gray-400 hover:text-white transition"
           >
@@ -363,10 +363,9 @@ export default function ReportPage() {
                         <span className={`px-3 py-1 rounded-full text-white text-sm font-bold ${CONDITION_COLORS[finding.condition] || 'bg-gray-500'}`}>
                           {CONDITION_LABELS[finding.condition] || finding.condition}
                         </span>
-                        <span className={`text-sm ${
-                          finding.confidence === 'high' ? 'text-red-400' :
-                          finding.confidence === 'medium' ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
+                        <span className={`text-sm ${finding.confidence === 'high' ? 'text-red-400' :
+                            finding.confidence === 'medium' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
                           {finding.confidence?.toUpperCase() || 'UNKNOWN'} confidence
                         </span>
                       </div>
@@ -468,7 +467,7 @@ export default function ReportPage() {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                          legend: { 
+                          legend: {
                             position: 'bottom',
                             labels: { color: '#D1D5DB' }
                           },
@@ -492,12 +491,12 @@ export default function ReportPage() {
               <div className="h-64">
                 <Bar
                   data={{
-                    labels: Object.keys(metrics).slice(0, 8).map(k => 
+                    labels: Object.keys(metrics).slice(0, 8).map(k =>
                       k.replace(/([A-Z])/g, ' $1').trim().substring(0, 12)
                     ),
                     datasets: [{
                       label: 'Score',
-                      data: Object.values(metrics).slice(0, 8).map(v => 
+                      data: Object.values(metrics).slice(0, 8).map(v =>
                         typeof v === 'number' ? v : 0
                       ),
                       backgroundColor: [
@@ -556,18 +555,17 @@ export default function ReportPage() {
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <span>📅</span> 4-Week Action Plan
               </h2>
-              
+
               {/* Week Tabs */}
               <div className="flex gap-2 mb-4">
                 {[1, 2, 3, 4].map((week) => (
                   <button
                     key={week}
                     onClick={() => setActiveWeek(week)}
-                    className={`px-4 py-2 rounded-lg font-bold transition ${
-                      activeWeek === week
+                    className={`px-4 py-2 rounded-lg font-bold transition ${activeWeek === week
                         ? 'bg-blue-600 text-white'
                         : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
-                    }`}
+                      }`}
                   >
                     Week {week}
                   </button>
@@ -622,7 +620,7 @@ export default function ReportPage() {
             {/* Disclaimer */}
             <div className="bg-yellow-900/20 rounded-xl p-4 border border-yellow-800/50">
               <p className="text-yellow-200/80 text-sm text-center">
-                ⚠️ This is a screening tool, not a clinical diagnosis. Please consult with 
+                ⚠️ This is a screening tool, not a clinical diagnosis. Please consult with
                 qualified healthcare professionals for comprehensive evaluation.
               </p>
             </div>
@@ -666,18 +664,22 @@ export default function ReportPage() {
             </div>
 
             {emailStatus ? (
-              <div className={`p-4 rounded-lg mb-4 ${
-                emailStatus.success ? 'bg-green-900/50 border border-green-700' : 'bg-red-900/50 border border-red-700'
-              }`}>
+              <div className={`p-4 rounded-lg mb-4 ${emailStatus.success ? 'bg-green-900/50 border border-green-700' : 'bg-red-900/50 border border-red-700'
+                }`}>
                 <p className={emailStatus.success ? 'text-green-400' : 'text-red-400'}>
                   {emailStatus.success ? '✅' : '❌'} {emailStatus.message}
                 </p>
               </div>
             ) : (
               <>
-                <p className="text-gray-400 mb-4">
+                <p className="text-gray-400 mb-2">
                   Send the diagnostic report to your email address for easy sharing with educators or healthcare providers.
                 </p>
+                <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3 mb-4">
+                  <p className="text-blue-300 text-sm">
+                    📎 <strong>Includes:</strong> HTML report + PDF attachment
+                  </p>
+                </div>
 
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2 text-sm">Email Address</label>

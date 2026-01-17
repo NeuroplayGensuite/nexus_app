@@ -16,8 +16,8 @@ export function calculateMSE(
 
   actualPath.forEach((actual) => {
     const closest = findClosestPoint(actual, idealPath);
-    const squaredError = 
-      Math.pow(actual.x - closest.x, 2) + 
+    const squaredError =
+      Math.pow(actual.x - closest.x, 2) +
       Math.pow(actual.y - closest.y, 2);
     totalSquaredError += squaredError;
   });
@@ -50,17 +50,17 @@ function findClosestPoint(point: Coordinate, path: Coordinate[]): Coordinate {
  */
 export function interpolatePath(path: Coordinate[], numPoints: number = 100): Coordinate[] {
   if (path.length < 2) return path;
-  
+
   const interpolated: Coordinate[] = [];
   const totalLength = calculatePathLength(path);
   const segmentLength = totalLength / numPoints;
-  
+
   let currentDist = 0;
   let pathIndex = 0;
-  
+
   for (let i = 0; i <= numPoints; i++) {
     const targetDist = i * segmentLength;
-    
+
     while (pathIndex < path.length - 1) {
       const segDist = distance(path[pathIndex], path[pathIndex + 1]);
       if (currentDist + segDist >= targetDist) {
@@ -76,7 +76,7 @@ export function interpolatePath(path: Coordinate[], numPoints: number = 100): Co
       pathIndex++;
     }
   }
-  
+
   return interpolated;
 }
 
@@ -110,7 +110,7 @@ export function calculateWallHuggingVariance(
   path.forEach((point) => {
     wallBoundaries.forEach((wall) => {
       const distToWall = pointToLineDistance(point, wall);
-      
+
       if (distToWall < COLLISION_THRESHOLD) {
         collisions++;
       } else if (distToWall < PROXIMITY_THRESHOLD) {
@@ -169,4 +169,48 @@ function pointToLineDistance(
  */
 export function normalizeMSE(mse: number, maxExpectedMSE: number = 2500): number {
   return Math.min(100, (mse / maxExpectedMSE) * 100);
+}
+
+/**
+ * Count wall collisions in a path
+ */
+export function countWallCollisions(
+  path: Coordinate[],
+  wallBoundaries: WallBoundary[]
+): number {
+  let collisions = 0;
+  const COLLISION_THRESHOLD = 5; // pixels
+
+  path.forEach((point) => {
+    wallBoundaries.forEach((wall) => {
+      const distToWall = pointToLineDistance(point, wall);
+      if (distToWall < COLLISION_THRESHOLD) {
+        collisions++;
+      }
+    });
+  });
+
+  return collisions;
+}
+
+/**
+ * Count proximity events (near walls) in a path
+ */
+export function countProximityEvents(
+  path: Coordinate[],
+  wallBoundaries: WallBoundary[]
+): number {
+  let proximityEvents = 0;
+  const PROXIMITY_THRESHOLD = 20; // pixels
+
+  path.forEach((point) => {
+    wallBoundaries.forEach((wall) => {
+      const distToWall = pointToLineDistance(point, wall);
+      if (distToWall < PROXIMITY_THRESHOLD) {
+        proximityEvents++;
+      }
+    });
+  });
+
+  return proximityEvents;
 }

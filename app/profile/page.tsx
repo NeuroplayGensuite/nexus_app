@@ -27,7 +27,7 @@ const GRADE_OPTIONS = ['LKG', 'UKG', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4',
 export default function ProfilePage() {
   const router = useRouter();
   const { setChildProfile, resetAllSessions } = useSessionStore();
-  
+
   const [name, setName] = useState('');
   const [age, setAge] = useState(8);
   const [grade, setGrade] = useState('');
@@ -57,7 +57,7 @@ export default function ProfilePage() {
       preferredLanguage,
       createdAt: Date.now(),
     };
-    
+
     // Reset all sessions when creating a new profile
     resetAllSessions();
     setChildProfile(profile);
@@ -65,53 +65,99 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-pink-900 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto">
-        {/* Progress indicator */}
-        <div className="flex justify-center gap-2 mb-8">
+    <main className="min-h-screen animated-gradient relative overflow-hidden p-4 md:p-8">
+      {/* Animated Particles Background */}
+      <div className="particles-bg">
+        {[...Array(15)].map((_, i) => (
+          <div
+            key={i}
+            className="particle"
+            style={{
+              width: `${Math.random() * 80 + 40}px`,
+              height: `${Math.random() * 80 + 40}px`,
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 15}s`,
+              animationDuration: `${Math.random() * 8 + 12}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 max-w-3xl mx-auto">
+        {/* Animated Logo */}
+        <div className="text-center mb-8 animate-float">
+          <span className="text-8xl inline-block animate-bounce">🎮</span>
+          <h1 className="text-4xl md:text-5xl font-black mt-4 mb-2">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500">
+              Create Your Profile
+            </span>
+          </h1>
+          <p className="text-purple-200 text-lg font-semibold">Let's make your gaming experience personal! ✨</p>
+        </div>
+
+        {/* Enhanced Progress indicator with glow */}
+        <div className="flex justify-center gap-4 mb-12">
           {[1, 2, 3].map((s) => (
-            <div
-              key={s}
-              className={`w-3 h-3 rounded-full transition-all ${
-                s === step ? 'bg-yellow-400 scale-125' : s < step ? 'bg-green-400' : 'bg-white/30'
-              }`}
-            />
+            <div key={s} className="flex flex-col items-center gap-2">
+              <div
+                className={`w-4 h-4 rounded-full transition-all duration-500 ${s === step
+                    ? 'bg-yellow-400 scale-150 neon-glow-purple shadow-2xl'
+                    : s < step
+                      ? 'bg-green-400 scale-110 shadow-lg shadow-green-400/50'
+                      : 'bg-white/20 scale-100'
+                  }`}
+              />
+              <span className={`text-xs font-bold ${s === step ? 'text-yellow-400' : s < step ? 'text-green-400' : 'text-white/40'
+                }`}>
+                {s === 1 ? 'Info' : s === 2 ? 'Interests' : 'Finish'}
+              </span>
+            </div>
           ))}
         </div>
 
         {/* Step 1: Basic Info */}
         {step === 1 && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-3xl p-6 md:p-8 animate-fadeIn">
-            <h1 className="text-3xl font-bold text-white text-center mb-2">
-              👋 Hello, Friend!
-            </h1>
-            <p className="text-purple-200 text-center mb-8">
-              Let&apos;s get to know you! / നമുക്ക് പരിചയപ്പെടാം!
-            </p>
+          <div className="glass-card-strong rounded-3xl p-8 md:p-10 border-2 border-purple-500/30 shadow-2xl animate-fadeIn">
+            <div className="text-center mb-8">
+              <span className="text-6xl mb-4 inline-block animate-bounce">👋</span>
+              <h2 className="text-4xl font-black text-white mb-3">
+                Hello, New Friend!
+              </h2>
+              <p className="text-purple-200 text-lg font-semibold">
+                Let's get to know you! / നമുക്ക് പരിചയപ്പെടാം!
+              </p>
+            </div>
 
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* Name */}
               <div>
-                <label className="block text-white font-medium mb-2">
-                  What&apos;s your name? 🌟
+                <label className="flex items-center gap-2 text-white font-black text-lg mb-3">
+                  <span className="text-2xl">🌟</span>
+                  What's your name?
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-4 rounded-xl bg-white/20 text-white text-lg placeholder-white/50 border-2 border-white/30 focus:border-yellow-400 focus:outline-none transition"
-                  placeholder="Type your name here..."
+                  className="w-full px-6 py-5 rounded-2xl bg-white/10 text-white text-xl font-semibold placeholder-white/40 border-2 border-purple-500/30 focus:border-cyan-400 focus:outline-none transition-all focus:scale-105 focus:shadow-xl focus:shadow-cyan-400/20"
+                  placeholder="Type your awesome name..."
                 />
               </div>
 
               {/* Age Slider */}
               <div>
-                <label className="block text-white font-medium mb-2">
-                  How old are you? 🎂
+                <label className="flex items-center gap-2 text-white font-black text-lg mb-3">
+                  <span className="text-2xl">🎂</span>
+                  How old are you?
                 </label>
-                <div className="bg-white/20 rounded-xl p-4">
-                  <div className="text-center text-5xl font-bold text-yellow-400 mb-4">
-                    {age}
+                <div className="glass-card rounded-2xl p-6 border border-purple-500/30">
+                  <div className="text-center mb-6">
+                    <div className="inline-block glass-card-strong px-8 py-4 rounded-3xl border-2 border-yellow-400/50 neon-glow-purple">
+                      <span className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+                        {age}
+                      </span>
+                    </div>
                   </div>
                   <input
                     type="range"
@@ -119,9 +165,12 @@ export default function ProfilePage() {
                     max={16}
                     value={age}
                     onChange={(e) => setAge(Number(e.target.value))}
-                    className="w-full h-3 rounded-full appearance-none bg-white/30 cursor-pointer"
+                    className="w-full h-4 rounded-full appearance-none bg-purple-900/50 cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #fbbf24 0%, #f59e0b ${((age - 4) / 12) * 100}%, rgba(139, 92, 246, 0.3) ${((age - 4) / 12) * 100}%, rgba(139, 92, 246, 0.3) 100%)`
+                    }}
                   />
-                  <div className="flex justify-between text-white/60 text-sm mt-2">
+                  <div className="flex justify-between text-purple-300 text-sm font-bold mt-3">
                     <span>4 years</span>
                     <span>16 years</span>
                   </div>
@@ -130,20 +179,20 @@ export default function ProfilePage() {
 
               {/* Grade */}
               <div>
-                <label className="block text-white font-medium mb-2">
-                  Which class are you in? 📚
+                <label className="flex items-center gap-2 text-white font-black text-lg mb-3">
+                  <span className="text-2xl">📚</span>
+                  Which class are you in?
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-3">
                   {GRADE_OPTIONS.map((g) => (
                     <button
                       key={g}
                       type="button"
                       onClick={() => setGrade(g)}
-                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                        grade === g
-                          ? 'bg-yellow-400 text-purple-900 scale-105'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
+                      className={`py-3 px-4 rounded-xl text-sm font-black transition-all ${grade === g
+                          ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-xl shadow-yellow-500/50'
+                          : 'glass-card text-white hover:scale-105 border border-purple-500/20'
+                        }`}
                     >
                       {g}
                     </button>
@@ -155,7 +204,7 @@ export default function ProfilePage() {
             <button
               onClick={() => setStep(2)}
               disabled={!name || !grade}
-              className="w-full mt-8 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-purple-900 font-bold text-xl rounded-xl hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
+              className="btn-primary w-full mt-10 py-5 text-white font-black text-xl rounded-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-2xl"
             >
               Next → What do you love? 💖
             </button>
@@ -164,48 +213,58 @@ export default function ProfilePage() {
 
         {/* Step 2: Interests */}
         {step === 2 && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-3xl p-6 md:p-8 animate-fadeIn">
-            <h1 className="text-3xl font-bold text-white text-center mb-2">
-              🎯 Pick Your Favorites!
-            </h1>
-            <p className="text-purple-200 text-center mb-2">
-              Choose up to 5 things you love
-            </p>
-            <p className="text-yellow-400 text-center mb-6 text-sm">
-              This helps us make games just for you! ✨
-            </p>
+          <div className="glass-card-strong rounded-3xl p-8 md:p-10 border-2 border-purple-500/30 shadow-2xl animate-fadeIn">
+            <div className="text-center mb-8">
+              <span className="text-6xl mb-4 inline-block animate-bounce">🎯</span>
+              <h2 className="text-4xl font-black text-white mb-3">
+                Pick Your Favorites!
+              </h2>
+              <p className="text-purple-200 text-lg font-semibold mb-2">
+                Choose up to 5 things you love
+              </p>
+              <div className="glass-card inline-block px-6 py-3 rounded-2xl border border-yellow-400/50">
+                <p className="text-yellow-400 text-sm font-black">
+                  ✨ Selected: {interests.length}/5
+                </p>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
               {INTEREST_OPTIONS.map((interest) => (
                 <button
                   key={interest.name}
                   type="button"
                   onClick={() => toggleInterest(interest.name)}
-                  className={`flex flex-col items-center justify-center p-4 rounded-xl transition-all ${
-                    interests.includes(interest.name)
-                      ? 'bg-yellow-400 text-purple-900 scale-105 ring-4 ring-yellow-300'
-                      : 'bg-white/20 text-white hover:bg-white/30'
-                  }`}
+                  disabled={!interests.includes(interest.name) && interests.length >= 5}
+                  className={`flex flex-col items-center justify-center p-5 rounded-2xl transition-all duration-300 ${interests.includes(interest.name)
+                      ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-2xl shadow-yellow-500/50 neon-glow-purple'
+                      : 'glass-card text-white hover:scale-105 border border-purple-500/20 disabled:opacity-30 disabled:cursor-not-allowed'
+                    }`}
                 >
-                  <span className="text-3xl mb-1">{interest.emoji}</span>
-                  <span className="text-xs font-medium">{interest.name}</span>
+                  <span className="text-4xl mb-2 transform transition-transform duration-300 hover:scale-125">
+                    {interest.emoji}
+                  </span>
+                  <span className="text-xs font-black text-center">{interest.name}</span>
+                  {interests.includes(interest.name) && (
+                    <span className="text-lg mt-1">✓</span>
+                  )}
                 </button>
               ))}
             </div>
 
-            <div className="flex gap-3 mt-8">
+            <div className="flex gap-4 mt-10">
               <button
                 onClick={() => setStep(1)}
-                className="flex-1 py-4 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition"
+                className="flex-1 py-5 glass-card text-white font-black text-lg rounded-2xl hover:scale-105 transition-all border border-purple-500/30"
               >
                 ← Back
               </button>
               <button
                 onClick={() => setStep(3)}
                 disabled={interests.length === 0}
-                className="flex-1 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-purple-900 font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-50"
+                className="btn-primary flex-1 py-5 text-white font-black text-lg rounded-2xl hover:scale-105 transition-all disabled:opacity-50 shadow-2xl"
               >
-                Next →
+                Next → Almost Done! 🎉
               </button>
             </div>
           </div>
@@ -231,33 +290,30 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => setPreferredLanguage('en')}
-                    className={`py-4 rounded-xl font-medium transition-all ${
-                      preferredLanguage === 'en'
+                    className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'en'
                         ? 'bg-yellow-400 text-purple-900'
                         : 'bg-white/20 text-white hover:bg-white/30'
-                    }`}
+                      }`}
                   >
                     🇬🇧 English
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreferredLanguage('ml')}
-                    className={`py-4 rounded-xl font-medium transition-all ${
-                      preferredLanguage === 'ml'
+                    className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'ml'
                         ? 'bg-yellow-400 text-purple-900'
                         : 'bg-white/20 text-white hover:bg-white/30'
-                    }`}
+                      }`}
                   >
                     🇮🇳 മലയാളം
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreferredLanguage('hi')}
-                    className={`py-4 rounded-xl font-medium transition-all ${
-                      preferredLanguage === 'hi'
+                    className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'hi'
                         ? 'bg-yellow-400 text-purple-900'
                         : 'bg-white/20 text-white hover:bg-white/30'
-                    }`}
+                      }`}
                   >
                     🇮🇳 हिंदी
                   </button>
@@ -317,9 +373,9 @@ export default function ProfilePage() {
         {step === 3 && name && (
           <div className="mt-6 bg-white/5 rounded-xl p-4 text-center">
             <p className="text-white/80">
-              Ready to play, <span className="text-yellow-400 font-bold">{name}</span>! 
+              Ready to play, <span className="text-yellow-400 font-bold">{name}</span>!
               You love {interests.slice(0, 3).join(', ')}
-              {interests.length > 3 && ` and ${interests.length - 3} more`}. 
+              {interests.length > 3 && ` and ${interests.length - 3} more`}.
               Let&apos;s go! 🎮
             </p>
           </div>

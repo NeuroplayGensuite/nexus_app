@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Lexend } from "next/font/google";
 import "./globals.css";
+import { OfflineDetector } from "@/components/OfflineDetector";
 
-const lexend = Lexend({ 
+const lexend = Lexend({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
   variable: "--font-lexend",
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${lexend.variable} font-sans antialiased bg-slate-900 text-white`}>
+        <OfflineDetector />
         {children}
       </body>
     </html>

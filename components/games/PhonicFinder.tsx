@@ -88,20 +88,31 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
     wasSlip: boolean;
   }[]>([]);
   const [currentItems, setCurrentItems] = useState<PhonicItem[]>([]);
-  
+
   const audioCueTimeRef = useRef<number>(0);
   const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
-  
+
   const { startSession, endSession, addEvent, updateMetrics } = useSessionStore();
-  
+
   // 🌟 Get dynamically generated phoneme content based on child's interests
   const { level: generatedLevel, isLoading: levelLoading, isGenerated } = usePhonicLevel();
+
+  // Helper to get emoji based on word - MUST be before early return
+  const getEmojiForWord = (word: string): string => {
+    const emojiMap: Record<string, string> = {
+      ball: '⚽', bat: '🏏', catch: '🧤', pitch: '🎯', run: '🏃',
+      ship: '🚢', sheep: '🐑', sun: '☀️', cat: '🐱', car: '🚗',
+      fish: '🐟', tree: '🌳', bird: '🐦', dog: '🐕', house: '🏠',
+      flower: '🌸', star: '⭐', moon: '🌙', rocket: '🚀', train: '🚂'
+    };
+    return emojiMap[word.toLowerCase()] || '📦';
+  };
 
   // Generate shuffled items from the AI-generated level
   useEffect(() => {
     if (generatedLevel && currentRound < generatedLevel.targetWords.length) {
       const targetWord = generatedLevel.targetWords[currentRound];
-      
+
       // Create items: 1 target word + 3 distractors
       const items: PhonicItem[] = [
         {
@@ -119,59 +130,73 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
           isCorrect: false
         }))
       ];
-      
+
       // Shuffle the items
       const shuffled = items.sort(() => Math.random() - 0.5);
       setCurrentItems(shuffled);
     }
   }, [generatedLevel, currentRound]);
-  
-  // Helper to get emoji based on word
-  const getEmojiForWord = (word: string): string => {
-    const emojiMap: Record<string, string> = {
-      ball: '⚽', bat: '🏏', catch: '🧤', pitch: '🎯', run: '🏃',
-      ship: '🚢', sheep: '🐑', sun: '☀️', cat: '🐱', car: '🚗',
-      fish: '🐟', tree: '🌳', bird: '🐦', dog: '🐕', house: '🏠',
-      flower: '🌸', star: '⭐', moon: '🌙', rocket: '🚀', train: '🚂'
-    };
-    return emojiMap[word.toLowerCase()] || '📦';
-  };
 
   // Speak the phoneme using Web Speech API
   const speakPhoneme = useCallback((phoneme: string, word: string) => {
     if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(
-        `Find something that starts with ${phoneme}. Like ${word}.`
-      );
-      utterance.rate = 0.8;
-      utterance.pitch = 1.1;
-      
-      utterance.onend = () => {
-        audioCueTimeRef.current = Date.now();
+      try {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance();
+
+        // Configure speech
+        utterance.lang = 'en-US';
+        utterance.rate = 0.8; // Slower for clarity
+        utterance.pitch = 1.2; // Slightly higher pitch for kids
+
+        // Speak: "Find the word that starts with [phoneme]"
+        utterance.text = `Find the word that starts with ${phoneme}. Listen: ${word}.`;
+
+        utterance.onstart = () => {
+          audioCueTimeRef.current = Date.now();
+          setShowingPhoneme(true);
+        };
+
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event.error);
+          setShowingPhoneme(true);
+          audioCueTimeRef.current = Date.now();
+        };
+
+        speechSynthRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Speech synthesis failed:', error);
+        // Fallback: show the items without audio
         setShowingPhoneme(true);
-      };
-      
-      speechSynthRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
+        audioCueTimeRef.current = Date.now();
+      }
     } else {
-      // Fallback if speech not available
-      audioCueTimeRef.current = Date.now();
+      // No speech synthesis support - show items immediately
       setShowingPhoneme(true);
+      audioCueTimeRef.current = Date.now();
     }
-  }, []);
+
+    addEvent({
+      type: 'phonic_audio_cue',
+      data: {
+        event: 'phonic_cue_played',
+        data: { phoneme, word }
+      }
+    });
+  }, [addEvent]);
 
   // Start the game
   const handleStart = useCallback(() => {
     if (!generatedLevel) return;
-    
+
     setIsPlaying(true);
     setCurrentRound(0);
     setResults([]);
     startSession('phonic');
-    
+
     // Start first round after a brief delay
     setTimeout(() => {
       speakPhoneme(generatedLevel.targetWords[0].phoneme, generatedLevel.targetWords[0].word);
@@ -184,19 +209,19 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
 
     const responseTime = Date.now();
     const delay = calculatePhonicRetrievalSpeed(audioCueTimeRef.current, responseTime);
-    
+
     // Determine if this was a "phonemic slip" - visually similar but phonetically different
     const targetWord = generatedLevel.targetWords[currentRound];
     const wasSlip = !item.isCorrect && item.word[0].toLowerCase() === targetWord.word[0].toLowerCase();
-    
+
     const result = {
       delay,
       wasCorrect: item.isCorrect,
       wasSlip,
     };
-    
+
     setResults(prev => [...prev, result]);
-    
+
     addEvent({
       type: 'phonic_response',
       data: {
@@ -211,16 +236,16 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
 
     // Show feedback
     setFeedback(item.isCorrect ? 'correct' : 'wrong');
-    
+
     setTimeout(() => {
       setFeedback(null);
       setShowingPhoneme(false);
-      
+
       // Move to next round or complete
       if (currentRound < generatedLevel.targetWords.length - 1) {
         const nextRound = currentRound + 1;
         setCurrentRound(nextRound);
-        
+
         setTimeout(() => {
           const nextTarget = generatedLevel.targetWords[nextRound];
           speakPhoneme(nextTarget.phoneme, nextTarget.word);
@@ -254,7 +279,7 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
       phonemicSlips: metrics.phonemicSlips,
       totalPhonicAttempts: metrics.totalAttempts,
     });
-    
+
     endSession();
     onComplete(metrics);
   }, [results, updateMetrics, endSession, onComplete]);
@@ -268,6 +293,35 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
     };
   }, []);
 
+  // Show loading state while generating content
+  if (levelLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] p-8">
+        <div className="relative mb-6">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-500"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-2xl">🔊</span>
+          </div>
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">
+          Preparing Your Phonics Game...
+        </h3>
+        <p className="text-gray-400 text-center max-w-md">
+          {isGenerated
+            ? "Creating sound challenges based on your interests..."
+            : "Loading audio elements..."}
+        </p>
+        {typeof window !== 'undefined' && !('speechSynthesis' in window) && (
+          <div className="mt-4 p-3 bg-yellow-600/20 border border-yellow-600/50 rounded-lg max-w-md">
+            <p className="text-yellow-400 text-sm text-center">
+              ℹ️ Audio not available in this browser. We'll show text instead!
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-6 p-4">
       {/* Loading state */}
@@ -277,7 +331,7 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
           <p className="text-purple-400">Creating personalized phoneme game...</p>
         </div>
       )}
-      
+
       <div className="text-center mb-2">
         <h2 className="text-2xl font-bold text-white mb-1">
           🔊 {generatedLevel?.theme || 'Phonic Finder'}
@@ -288,10 +342,10 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
           </span>
         )}
         <p className="text-gray-400">
-          {!isPlaying && !isComplete 
-            ? generatedLevel?.instructions || 'Listen to the sound and find the matching picture!' 
-            : isComplete 
-              ? '🎉 Amazing! You found all the sounds!' 
+          {!isPlaying && !isComplete
+            ? generatedLevel?.instructions || 'Listen to the sound and find the matching picture!'
+            : isComplete
+              ? '🎉 Amazing! You found all the sounds!'
               : generatedLevel && currentRound < generatedLevel.targetWords.length
                 ? `Tap the picture that starts with /${generatedLevel.targetWords[currentRound].phoneme}/ sound!`
                 : 'Listen and tap the matching picture!'}
@@ -304,9 +358,8 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
           {generatedLevel.targetWords.map((_, idx) => (
             <div
               key={idx}
-              className={`w-3 h-3 rounded-full ${
-                idx < currentRound ? 'bg-green-500' : idx === currentRound ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'
-              }`}
+              className={`w-3 h-3 rounded-full ${idx < currentRound ? 'bg-green-500' : idx === currentRound ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'
+                }`}
             />
           ))}
         </div>
@@ -341,10 +394,10 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
               disabled={!!feedback}
               className={`
                 p-6 rounded-2xl text-center transition-all transform hover:scale-105
-                ${feedback === 'correct' && item.isCorrect 
-                  ? 'bg-green-500 scale-110' 
-                  : feedback === 'wrong' && !item.isCorrect 
-                    ? 'bg-red-500 opacity-50' 
+                ${feedback === 'correct' && item.isCorrect
+                  ? 'bg-green-500 scale-110'
+                  : feedback === 'wrong' && !item.isCorrect
+                    ? 'bg-red-500 opacity-50'
                     : 'bg-slate-700 hover:bg-slate-600'}
                 ${feedback && item.isCorrect ? 'ring-4 ring-green-400' : ''}
               `}

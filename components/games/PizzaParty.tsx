@@ -53,7 +53,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [gamePhase, setGamePhase] = useState<'order' | 'answer' | 'feedback'>('order');
-  
+
   // Current order
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [timeLeft, setTimeLeft] = useState(10);
@@ -62,7 +62,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
   const [score, setScore] = useState(0);
   const [hearts, setHearts] = useState(3);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
-  
+
   // Metrics
   const [results, setResults] = useState<{
     orderTotal: number;
@@ -70,15 +70,15 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     responseTime: number;
     correct: boolean;
   }[]>([]);
-  
+
   const orderStartTimeRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const { startSession, endSession, addEvent, updateMetrics } = useSessionStore();
-  
+
   // Start session on mount
   useEffect(() => {
-    startSession('cricket-forge');
+    startSession('cricket');
   }, [startSession]);
 
   // Generate pizza order
@@ -87,29 +87,29 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     const numItems = Math.min(Math.floor(currentRound / 2) + 2, 4); // 2-4 items
     const items: { item: string; emoji: string; quantity: number; price: number }[] = [];
     let total = 0;
-    
+
     // Pick random items
     const availableItems = [...PIZZA_ITEMS];
     for (let i = 0; i < numItems; i++) {
       const itemIndex = Math.floor(Math.random() * availableItems.length);
       const selectedItem = availableItems.splice(itemIndex, 1)[0];
       const quantity = Math.floor(Math.random() * 3) + 1; // 1-3 of each item
-      
+
       items.push({
         item: selectedItem.item,
         emoji: selectedItem.emoji,
         quantity,
         price: selectedItem.price,
       });
-      
+
       total += selectedItem.price * quantity;
     }
-    
+
     // Generate answer options
     const options: OrderOption[] = [
       { value: total, label: `$${total}` }
     ];
-    
+
     // Add 3 distractors
     const usedValues = new Set([total]);
     while (options.length < 4) {
@@ -120,7 +120,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
         options.push({ value: distractor, label: `$${distractor}` });
       }
     }
-    
+
     const order: Order = {
       id: `order-${Date.now()}`,
       customer: customer.name,
@@ -128,14 +128,14 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
       items,
       total,
     };
-    
+
     setCurrentOrder(order);
     setAnswerOptions(options.sort(() => Math.random() - 0.5));
     setGamePhase('order');
     setSelectedAnswer(null);
     setTimeLeft(10);
     orderStartTimeRef.current = Date.now();
-    
+
     // Start countdown
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -148,7 +148,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
         return prev - 1;
       });
     }, 1000);
-    
+
     addEvent({
       type: 'order-start',
       data: { round: currentRound, total: order.total, items: numItems }
@@ -160,7 +160,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     setHearts(prev => prev - 1);
     setFeedback('wrong');
     setGamePhase('feedback');
-    
+
     if (currentOrder) {
       results.push({
         orderTotal: currentOrder.total,
@@ -169,7 +169,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
         correct: false,
       });
     }
-    
+
     setTimeout(() => {
       if (hearts <= 1 || currentRound >= TOTAL_ROUNDS - 1) {
         finishGame();
@@ -184,34 +184,34 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
   // Handle answer selection
   const handleAnswer = (value: number) => {
     if (gamePhase !== 'order' || !currentOrder) return;
-    
+
     if (timerRef.current) clearInterval(timerRef.current);
-    
+
     const responseTime = Date.now() - orderStartTimeRef.current;
     const correct = value === currentOrder.total;
-    
+
     setSelectedAnswer(value);
     setFeedback(correct ? 'correct' : 'wrong');
     setGamePhase('feedback');
-    
+
     if (correct) {
       setScore(prev => prev + Math.floor((timeLeft / 10) * 100));
     } else {
       setHearts(prev => prev - 1);
     }
-    
+
     results.push({
       orderTotal: currentOrder.total,
       playerAnswer: value,
       responseTime,
       correct,
     });
-    
+
     addEvent({
       type: 'answer-submitted',
       data: { correct, responseTime, round: currentRound }
     });
-    
+
     setTimeout(() => {
       if (hearts <= 1 && !correct) {
         finishGame();
@@ -229,26 +229,26 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
   const finishGame = () => {
     setIsComplete(true);
     setGamePhase('feedback');
-    
+
     if (timerRef.current) clearInterval(timerRef.current);
-    
+
     const correctAnswers = results.filter(r => r.correct).length;
     const accuracy = (correctAnswers / results.length) * 100;
     const avgResponseTime = results.reduce((sum, r) => sum + r.responseTime, 0) / results.length;
-    
+
     const responseTimes = results.map(r => ({ responseTime: r.responseTime, quantity: r.orderTotal }));
     const subitizingAnalysis = analyzeSubitizing(responseTimes);
-    
+
     const metrics = {
       subitizingThreshold: subitizingAnalysis.threshold,
       subitizingFailed: subitizingAnalysis.subitizingFailed,
       symbolicMappingSpeed: avgResponseTime,
       accuracy,
     };
-    
+
     updateMetrics(metrics);
     endSession();
-    
+
     onComplete(metrics);
   };
 
@@ -261,7 +261,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     setResults([]);
     setFeedback(null);
     startSession('cricket');
-    
+
     setTimeout(() => {
       generateOrder();
     }, 500);
@@ -284,7 +284,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
           <p className="text-lg text-gray-600 mb-8">
             Customers will order food. Calculate the total cost quickly!
           </p>
-          
+
           <div className="bg-orange-100 rounded-2xl p-6 mb-8">
             <h3 className="text-lg font-bold text-orange-700 mb-4">Menu Prices:</h3>
             <div className="grid grid-cols-2 gap-3 text-left">
@@ -297,7 +297,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
               ))}
             </div>
           </div>
-          
+
           <button
             onClick={handleStart}
             className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-4 px-8 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
@@ -312,7 +312,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
   if (isComplete) {
     const correctAnswers = results.filter(r => r.correct).length;
     const accuracy = (correctAnswers / results.length) * 100;
-    
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center p-8">
         <div className="max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-3xl p-8 text-center shadow-2xl">
@@ -325,7 +325,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
           <p className="text-2xl text-gray-700 mb-8">
             Final Score: <span className="font-bold text-orange-600">{score}</span>
           </p>
-          
+
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="bg-green-100 rounded-xl p-4">
               <div className="text-3xl mb-2">✅</div>
@@ -338,7 +338,7 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
               <div className="text-2xl font-bold text-blue-600">{Math.round(accuracy)}%</div>
             </div>
           </div>
-          
+
           <div className="text-gray-600 text-sm">Saving results...</div>
         </div>
       </div>

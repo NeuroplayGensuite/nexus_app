@@ -19,8 +19,8 @@ interface Connection {
 }
 
 export default function DotConnect({ onComplete }: DotConnectProps) {
-  const { addEvent } = useSessionStore();
-  
+  const { addEvent, startSession, endSession, updateMetrics } = useSessionStore();
+
   // Game state
   const [gamePhase, setGamePhase] = useState<'intro' | 'memorize' | 'draw' | 'feedback' | 'complete'>('intro');
   const [currentRound, setCurrentRound] = useState(1);
@@ -32,17 +32,17 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [countdown, setCountdown] = useState(5);
-  
+
   // Metrics
   const [startTime, setStartTime] = useState<number>(0);
   const [roundMetrics, setRoundMetrics] = useState<any[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
-  
+
   // Generate pattern (dots + connections)
   const generatePattern = useCallback(() => {
     const numDots = Math.min(4 + currentRound, 8); // 5 to 8 dots
     const newDots: Dot[] = [];
-    
+
     // Generate dots with minimum distance
     for (let i = 0; i < numDots; i++) {
       let x: number;
@@ -58,10 +58,10 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
         });
         attempts++;
       } while (!valid && attempts < 50);
-      
+
       newDots.push({ id: i, x, y });
     }
-    
+
     // Create interesting connections (not just sequential)
     const connections: Connection[] = [];
     const patterns = [
@@ -99,15 +99,20 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
         }
       }
     ];
-    
+
     // Pick random pattern
     patterns[Math.floor(Math.random() * patterns.length)]();
-    
+
     return { dots: newDots, connections };
   }, [currentRound]);
-  
+
   // Start game
   const startGame = () => {
+    // Start session on first round
+    if (currentRound === 1) {
+      startSession('dot');
+    }
+
     const pattern = generatePattern();
     setDots(pattern.dots);
     setTargetConnections(pattern.connections);
@@ -115,12 +120,12 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
     setCurrentDot(null);
     setGamePhase('memorize');
     setStartTime(Date.now());
-    
+
     addEvent({
       type: 'game-start',
       data: { round: currentRound, dots: pattern.dots.length, connections: pattern.connections.length }
     });
-    
+
     // Countdown then hide pattern
     let timeLeft = 5;
     setCountdown(5);
@@ -131,7 +136,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
         clearInterval(countInterval);
       }
     }, 1000);
-    
+
     setTimeout(() => {
       setGamePhase('draw');
       addEvent({
@@ -140,11 +145,11 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
       });
     }, 5000);
   };
-  
+
   // Handle dot click
   const handleDotClick = (dotId: number) => {
     if (gamePhase !== 'draw') return;
-    
+
     if (currentDot === null) {
       // Start new line
       setCurrentDot(dotId);
@@ -155,16 +160,16 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
           from: Math.min(currentDot, dotId),
           to: Math.max(currentDot, dotId)
         };
-        
+
         // Check if already exists
         const exists = playerConnections.some(
           conn => conn.from === newConnection.from && conn.to === newConnection.to
         );
-        
+
         if (!exists) {
           const newConnections = [...playerConnections, newConnection];
           setPlayerConnections(newConnections);
-          
+
           addEvent({
             type: 'connection-drawn',
             data: { from: currentDot, to: dotId }
@@ -174,19 +179,19 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
       setCurrentDot(null);
     }
   };
-  
+
   // Submit drawing
   const submitDrawing = () => {
     evaluateRound();
   };
-  
+
   // Clear last connection
   const undoConnection = () => {
     if (playerConnections.length > 0) {
       setPlayerConnections(prev => prev.slice(0, -1));
     }
   };
-  
+
   // Evaluate round
   const evaluateRound = () => {
     // Compare connections
@@ -197,17 +202,17 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
       );
       if (isCorrect) correctConnections++;
     });
-    
+
     const extraConnections = playerConnections.length - correctConnections;
     const missedConnections = targetConnections.length - correctConnections;
-    
-    const accuracy = targetConnections.length > 0 
-      ? (correctConnections / targetConnections.length) * 100 
+
+    const accuracy = targetConnections.length > 0
+      ? (correctConnections / targetConnections.length) * 100
       : 0;
-    
+
     const roundScore = Math.round(accuracy);
     const timeSpent = Date.now() - startTime;
-    
+
     setScore(prev => prev + roundScore);
     setRoundMetrics(prev => [...prev, {
       round: currentRound,
@@ -218,7 +223,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
       missedConnections,
       timeSpent,
     }]);
-    
+
     // Show feedback
     setGamePhase('feedback');
     if (accuracy >= 80) {
@@ -228,12 +233,12 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
     } else {
       setFeedback(`💫 Keep practicing! ${correctConnections}/${targetConnections.length} connections!`);
     }
-    
+
     addEvent({
       type: 'round-complete',
       data: { round: currentRound, accuracy, correctConnections, totalConnections: targetConnections.length }
     });
-    
+
     // Next round or complete
     setTimeout(() => {
       if (currentRound < totalRounds) {
@@ -244,26 +249,33 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
       }
     }, 3000);
   };
-  
+
   // Complete game
   const completeGame = () => {
     setGamePhase('complete');
-    
+
     const totalTime = roundMetrics.reduce((sum, m) => sum + m.timeSpent, 0);
     const avgAccuracy = roundMetrics.reduce((sum, m) => sum + m.accuracy, 0) / roundMetrics.length;
     const totalCorrect = roundMetrics.reduce((sum, m) => sum + m.correctConnections, 0);
     const totalConnections = roundMetrics.reduce((sum, m) => sum + m.totalConnections, 0);
-    
-    onComplete({
+
+    const metrics = {
       timeSpent: totalTime,
       accuracy: avgAccuracy,
       correctConnections: totalCorrect,
       totalConnections,
       visualSpatialScore: score,
+    };
+
+    updateMetrics(metrics);
+    endSession();
+
+    onComplete({
+      ...metrics,
       roundMetrics,
     });
   };
-  
+
   // Render SVG line
   const renderLine = (from: Dot, to: Dot, color: string, width: number = 3) => {
     return (
@@ -289,12 +301,12 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
             <div className="text-2xl font-bold">{score} pts</div>
           </div>
         </div>
-        
+
         {/* Intro Phase */}
         {gamePhase === 'intro' && (
           <div className="text-center py-12">
             <p className="text-xl mb-8">
-              {currentRound === 1 
+              {currentRound === 1
                 ? "Memorize the dot pattern, then recreate it by connecting the dots!"
                 : `Round ${currentRound} - Get Ready!`}
             </p>
@@ -306,14 +318,14 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
             </button>
           </div>
         )}
-        
+
         {/* Memorize Phase */}
         {gamePhase === 'memorize' && (
           <div className="space-y-6">
             <div className="text-center text-2xl font-bold mb-4">
               Memorize! {countdown}s
             </div>
-            <div 
+            <div
               ref={canvasRef}
               className="relative bg-black/30 rounded-2xl aspect-square max-w-xl mx-auto border-2 border-cyan-500/30"
             >
@@ -340,7 +352,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
             </div>
           </div>
         )}
-        
+
         {/* Draw Phase */}
         {gamePhase === 'draw' && (
           <div className="space-y-6">
@@ -350,7 +362,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
                 Click dots to connect them • {playerConnections.length} connections drawn
               </div>
             </div>
-            <div 
+            <div
               ref={canvasRef}
               className="relative bg-black/30 rounded-2xl aspect-square max-w-xl mx-auto border-2 border-teal-500/50"
             >
@@ -391,7 +403,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
                 </div>
               ))}
             </div>
-            
+
             <div className="flex justify-center gap-4">
               <button
                 onClick={undoConnection}
@@ -409,7 +421,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
             </div>
           </div>
         )}
-        
+
         {/* Feedback Phase */}
         {gamePhase === 'feedback' && (
           <div className="text-center py-12">
@@ -420,7 +432,7 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
             {/* Show comparison */}
             <div className="max-w-xl mx-auto">
               <div className="text-sm mb-2">Your pattern vs Correct pattern</div>
-              <div 
+              <div
                 className="relative bg-black/20 rounded-2xl aspect-square border border-white/20"
               >
                 <svg className="absolute inset-0 w-full h-full">
@@ -453,14 +465,14 @@ export default function DotConnect({ onComplete }: DotConnectProps) {
                 ))}
               </div>
               <div className="text-xs mt-2 opacity-60">
-                <span className="text-cyan-400">━━</span> Correct pattern • 
-                <span className="text-green-400"> ━━</span> Your correct lines • 
+                <span className="text-cyan-400">━━</span> Correct pattern •
+                <span className="text-green-400"> ━━</span> Your correct lines •
                 <span className="text-red-400"> ━━</span> Wrong lines
               </div>
             </div>
           </div>
         )}
-        
+
         {/* Complete Phase */}
         {gamePhase === 'complete' && (
           <div className="text-center py-12">

@@ -8,7 +8,7 @@ export interface Coordinate {
 
 export interface GameSession {
   id: string;
-  gameType: 'maze' | 'phonic' | 'cricket' | 'sync' | 'star';
+  gameType: 'maze' | 'phonic' | 'cricket' | 'sync' | 'star' | 'dot';
   startTime: number;
   endTime?: number;
   coordinates: Coordinate[];
@@ -31,23 +31,26 @@ export interface BiometricMetrics {
   jerkMean?: number;               // Average jerk value
   jerkVariance?: number;           // Jerk variance
   tremorIndicator?: number;        // 0-100 tremor score
-  
+
   // Phonic Finder (Dyslexia)
   phonicDelay?: number;            // Retrieval speed in ms
   phonemicSlips?: number;          // Auditory-visual mapping errors
   totalPhonicAttempts?: number;    // Total attempts
-  
+  totalAttempts?: number;          // General total attempts (all games)
+  accuracy?: number;               // General accuracy score (0-1)
+  missedBeats?: number;            // Missed rhythm beats (Sync Master)
+
   // Cricket Forge (Dyscalculia)
   subitizingThreshold?: number;    // Max instant recognition (1-5)
   subitizingFailed?: boolean;      // Failed subitizing test
   symbolicMappingSpeed?: number;   // Digit-quantity connection ms
   symbolicMappingErrors?: number;  // Mapping errors
-  
+
   // Sync Master (Dyspraxia)
   motorLag?: number;               // Eye-hand coordination lag ms
   gazeEntropy?: number;            // Eye movement chaos (0-1)
   rhythmAccuracy?: number;         // Timing accuracy percentage
-  
+
   // Star Mapper (NVLD)
   spatialDecay1s?: number;         // Accuracy after 1s delay
   spatialDecay3s?: number;         // Accuracy after 3s delay

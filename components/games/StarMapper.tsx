@@ -15,7 +15,7 @@ interface Star {
 
 export default function StarMapper({ onComplete }: StarMapperProps) {
   const { addEvent, startSession, endSession, updateMetrics } = useSessionStore();
-  
+
   // Game state
   const [gamePhase, setGamePhase] = useState<'intro' | 'memorize' | 'recall' | 'feedback' | 'complete'>('intro');
   const [currentRound, setCurrentRound] = useState(1);
@@ -25,23 +25,23 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [countdown, setCountdown] = useState(3);
-  
+
   // Metrics
   const [startTime, setStartTime] = useState<number>(0);
   const [roundMetrics, setRoundMetrics] = useState<any[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
-  
+
   // Grid configuration
   const GRID_SIZE = 6; // 6x6 grid
   const MEMORY_TIME = 3000; // 3 seconds to memorize
   const TOLERANCE = 35; // pixels - how close click must be to star
-  
+
   // Generate random star pattern
   const generatePattern = useCallback(() => {
     const numStars = Math.min(3 + currentRound, 8); // 4 to 8 stars
     const pattern: Star[] = [];
     const usedPositions = new Set<string>();
-    
+
     for (let i = 0; i < numStars; i++) {
       let x, y, key;
       do {
@@ -49,7 +49,7 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
         y = Math.floor(Math.random() * GRID_SIZE);
         key = `${x}-${y}`;
       } while (usedPositions.has(key));
-      
+
       usedPositions.add(key);
       pattern.push({
         id: i,
@@ -57,23 +57,28 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
         y: y * (100 / GRID_SIZE) + (50 / GRID_SIZE),
       });
     }
-    
+
     return pattern;
   }, [currentRound]);
-  
+
   // Start game
   const startGame = () => {
+    // Start session on first round
+    if (currentRound === 1) {
+      startSession('star');
+    }
+
     setGamePhase('memorize');
     setStartTime(Date.now());
     const pattern = generatePattern();
     setStarPattern(pattern);
     setPlayerClicks([]);
-    
+
     addEvent({
       type: 'game-start',
       data: { round: currentRound, patternSize: pattern.length }
     });
-    
+
     // Countdown then hide stars
     let timeLeft = 3;
     setCountdown(3);
@@ -84,7 +89,7 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
         clearInterval(countInterval);
       }
     }, 1000);
-    
+
     setTimeout(() => {
       setGamePhase('recall');
       addEvent({
@@ -93,63 +98,63 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
       });
     }, MEMORY_TIME);
   };
-  
+
   // Handle grid click
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (gamePhase !== 'recall') return;
-    
+
     const rect = gridRef.current?.getBoundingClientRect();
     if (!rect) return;
-    
+
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
+
     const newClick: Star = {
       id: playerClicks.length,
       x,
       y,
     };
-    
+
     setPlayerClicks(prev => [...prev, newClick]);
-    
+
     addEvent({
       type: 'star-click',
       data: { x, y, clickNumber: playerClicks.length + 1 }
     });
-    
+
     // If player has clicked same number of times as stars, evaluate
     if (playerClicks.length + 1 === starPattern.length) {
       evaluateRound(x, y);
     }
   };
-  
+
   // Evaluate round accuracy
   const evaluateRound = (lastX: number, lastY: number) => {
     const allClicks = [...playerClicks, { id: playerClicks.length, x: lastX, y: lastY }];
-    
+
     let correctClicks = 0;
     const matched = new Set<number>();
-    
+
     // Check each click against each star
     allClicks.forEach(click => {
       starPattern.forEach(star => {
         if (matched.has(star.id)) return;
-        
+
         const distance = Math.sqrt(
           Math.pow(click.x - star.x, 2) + Math.pow(click.y - star.y, 2)
         );
-        
+
         if (distance < (TOLERANCE / 6)) { // Adjust for percentage-based grid
           correctClicks++;
           matched.add(star.id);
         }
       });
     });
-    
+
     const accuracy = (correctClicks / starPattern.length) * 100;
     const roundScore = Math.round(accuracy);
     const timeSpent = Date.now() - startTime;
-    
+
     setScore(prev => prev + roundScore);
     setRoundMetrics(prev => [...prev, {
       round: currentRound,
@@ -158,7 +163,7 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
       totalStars: starPattern.length,
       timeSpent,
     }]);
-    
+
     // Show feedback
     setGamePhase('feedback');
     if (accuracy >= 80) {
@@ -168,12 +173,12 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
     } else {
       setFeedback(`💫 Keep trying! ${correctClicks}/${starPattern.length} stars!`);
     }
-    
+
     addEvent({
       type: 'round-complete',
       data: { round: currentRound, accuracy, correctClicks, totalStars: starPattern.length }
     });
-    
+
     // Next round or complete
     setTimeout(() => {
       if (currentRound < totalRounds) {
@@ -184,16 +189,16 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
       }
     }, 2000);
   };
-  
+
   // Complete game
   const completeGame = () => {
     setGamePhase('complete');
-    
+
     const totalTime = roundMetrics.reduce((sum, m) => sum + m.timeSpent, 0);
     const avgAccuracy = roundMetrics.reduce((sum, m) => sum + m.accuracy, 0) / roundMetrics.length;
     const totalCorrect = roundMetrics.reduce((sum, m) => sum + m.correctClicks, 0);
     const totalStars = roundMetrics.reduce((sum, m) => sum + m.totalStars, 0);
-    
+
     const metrics = {
       timeSpent: totalTime,
       accuracy: avgAccuracy,
@@ -201,10 +206,10 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
       totalStars,
       spatialErrors: totalStars - totalCorrect,
     };
-    
+
     updateMetrics(metrics);
     endSession();
-    
+
     onComplete({
       ...metrics,
       roundMetrics,
@@ -221,12 +226,12 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             <div className="text-2xl font-bold">{score} pts</div>
           </div>
         </div>
-        
+
         {/* Intro Phase */}
         {gamePhase === 'intro' && (
           <div className="text-center py-12">
             <p className="text-xl mb-8">
-              {currentRound === 1 
+              {currentRound === 1
                 ? "Remember where the stars appear, then click to recreate the pattern!"
                 : `Round ${currentRound} - Get Ready!`}
             </p>
@@ -238,19 +243,19 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             </button>
           </div>
         )}
-        
+
         {/* Memorize Phase */}
         {gamePhase === 'memorize' && (
           <div className="space-y-6">
             <div className="text-center text-2xl font-bold mb-4">
               Memorize! {countdown}s
             </div>
-            <div 
+            <div
               ref={gridRef}
               className="relative bg-black/30 rounded-2xl aspect-square max-w-xl mx-auto border-2 border-purple-500/30"
-              style={{ 
+              style={{
                 backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                backgroundSize: `${100/GRID_SIZE}% ${100/GRID_SIZE}%`
+                backgroundSize: `${100 / GRID_SIZE}% ${100 / GRID_SIZE}%`
               }}
             >
               {starPattern.map(star => (
@@ -269,20 +274,20 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             </div>
           </div>
         )}
-        
+
         {/* Recall Phase */}
         {gamePhase === 'recall' && (
           <div className="space-y-6">
             <div className="text-center text-xl mb-4">
               Click where the stars were! ({playerClicks.length}/{starPattern.length})
             </div>
-            <div 
+            <div
               ref={gridRef}
               onClick={handleGridClick}
               className="relative bg-black/30 rounded-2xl aspect-square max-w-xl mx-auto border-2 border-pink-500/50 cursor-crosshair"
-              style={{ 
+              style={{
                 backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                backgroundSize: `${100/GRID_SIZE}% ${100/GRID_SIZE}%`
+                backgroundSize: `${100 / GRID_SIZE}% ${100 / GRID_SIZE}%`
               }}
             >
               {playerClicks.map(click => (
@@ -301,7 +306,7 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             </div>
           </div>
         )}
-        
+
         {/* Feedback Phase */}
         {gamePhase === 'feedback' && (
           <div className="text-center py-12">
@@ -311,11 +316,11 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             </div>
             {/* Show both patterns for comparison */}
             <div className="mt-8 max-w-xl mx-auto">
-              <div 
+              <div
                 className="relative bg-black/20 rounded-2xl aspect-square border border-white/20"
-                style={{ 
+                style={{
                   backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)',
-                  backgroundSize: `${100/GRID_SIZE}% ${100/GRID_SIZE}%`
+                  backgroundSize: `${100 / GRID_SIZE}% ${100 / GRID_SIZE}%`
                 }}
               >
                 {starPattern.map(star => (
@@ -349,7 +354,7 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
             </div>
           </div>
         )}
-        
+
         {/* Complete Phase */}
         {gamePhase === 'complete' && (
           <div className="text-center py-12">

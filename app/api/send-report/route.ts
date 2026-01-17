@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import PDFDocument from 'pdfkit';
+import { Readable } from 'stream';
 
 // Email configuration from environment
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -164,6 +166,144 @@ function generateEmailHTML(
   `;
 }
 
+/**
+ * Generate PDF from report data
+ * Returns a Buffer containing the PDF
+ */
+function generatePDF(childName: string, childAge: number, report: ReportData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 40,
+      });
+
+      const conditionLabels: Record<string, string> = {
+        'dysgraphia-motor': 'Motor Dysgraphia',
+        'dysgraphia-spatial': 'Spatial Dysgraphia',
+        'dyslexia': 'Dyslexia',
+        'dyscalculia': 'Dyscalculia',
+        'dyspraxia': 'Dyspraxia',
+        'nvld': 'NVLD',
+      };
+
+      let buffers: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+      doc.on('end', () => {
+        resolve(Buffer.concat(buffers));
+      });
+      doc.on('error', reject);
+
+      // Title
+      doc.fontSize(24).font('Helvetica-Bold').text('NeuroGen Suite', { align: 'center' });
+      doc.fontSize(14).font('Helvetica').text('Diagnostic Report', { align: 'center' });
+      doc.moveDown(0.5);
+
+      // Child info
+      doc.fontSize(11).text(`Report for: ${childName} (Age: ${childAge})`, { align: 'center' });
+      doc.fontSize(10).text(`Generated: ${new Date().toLocaleDateString('en-IN', { dateStyle: 'long' })}`, { align: 'center' });
+      doc.moveDown(1);
+      doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+      doc.moveDown(0.5);
+
+      // Executive Summary
+      doc.fontSize(14).font('Helvetica-Bold').text('📋 Summary');
+      doc.fontSize(11).font('Helvetica').text(report.executiveSummary || 'Report summary not available.');
+      doc.moveDown(1);
+      doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+      doc.moveDown(0.5);
+
+      // Findings
+      if (report.findings && report.findings.length > 0) {
+        doc.fontSize(14).font('Helvetica-Bold').text('🔍 Key Findings');
+        doc.moveDown(0.3);
+
+        report.findings.forEach((finding: any) => {
+          doc.fontSize(11).font('Helvetica-Bold').text(conditionLabels[finding.condition] || finding.condition);
+          doc.fontSize(10).font('Helvetica').text(`Confidence: ${finding.confidence || 'Unknown'}`, { indent: 10 });
+
+          if (finding.evidence && finding.evidence.length > 0) {
+            doc.fontSize(10).text(`Evidence: ${finding.evidence.join(', ')}`, { indent: 10 });
+          }
+
+          if (finding.dailyLifeImpact) {
+            doc.fontSize(10).text(`Impact: ${finding.dailyLifeImpact}`, { indent: 10 });
+          }
+
+          doc.moveDown(0.3);
+        });
+
+        doc.moveDown(0.5);
+        doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+        doc.moveDown(0.5);
+      }
+
+      // Action Plan
+      if (report.actionPlan) {
+        doc.fontSize(14).font('Helvetica-Bold').text('📅 4-Week Action Plan');
+        doc.moveDown(0.3);
+
+        const weeks = ['week1', 'week2', 'week3', 'week4'];
+        weeks.forEach((week, index) => {
+          const weekNum = index + 1;
+          const actions = (report.actionPlan as any)[week] || [];
+
+          doc.fontSize(11).font('Helvetica-Bold').text(`Week ${weekNum}:`);
+          actions.forEach((action: string) => {
+            doc.fontSize(10).font('Helvetica').text(`• ${action}`, { indent: 20 });
+          });
+          doc.moveDown(0.2);
+        });
+
+        doc.moveDown(0.5);
+        doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+        doc.moveDown(0.5);
+      }
+
+      // Recommended Consultations
+      if (report.referrals && report.referrals.length > 0) {
+        doc.fontSize(14).font('Helvetica-Bold').text('👨‍⚕️ Recommended Consultations');
+        doc.moveDown(0.3);
+        report.referrals.forEach((referral: string) => {
+          doc.fontSize(10).font('Helvetica').text(`• ${referral}`);
+        });
+        doc.moveDown(0.5);
+        doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+        doc.moveDown(0.5);
+      }
+
+      // Strengths Observed
+      if (report.positiveNotes && report.positiveNotes.length > 0) {
+        doc.fontSize(14).font('Helvetica-Bold').text('💪 Strengths Observed');
+        doc.moveDown(0.3);
+        report.positiveNotes.forEach((note: string) => {
+          doc.fontSize(10).font('Helvetica').text(`✨ ${note}`);
+        });
+        doc.moveDown(0.5);
+        doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke('#cccccc');
+        doc.moveDown(0.5);
+      }
+
+      // Disclaimer
+      doc.fontSize(9).font('Helvetica').fillColor('#666666').text(
+        '⚠️ Disclaimer: This is a screening tool, not a clinical diagnosis. Please consult qualified healthcare professionals for comprehensive evaluation.',
+        { align: 'center' }
+      );
+      doc.fillColor('#000000'); // Reset color
+      doc.moveDown(1);
+
+      // Footer
+      doc.fontSize(8).fillColor('#999999').text('Generated by NeuroGen Suite | AI Samasya 2026 Hackathon Project', { align: 'center' });
+      doc.fillColor('#000000'); // Reset color
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, childName, childAge, report } = await request.json();
@@ -178,6 +318,15 @@ export async function POST(request: NextRequest) {
     // Generate HTML email
     const htmlContent = generateEmailHTML(childName || 'Child', childAge || 8, report);
 
+    // Generate PDF
+    let pdfBuffer: Buffer | null = null;
+    try {
+      pdfBuffer = await generatePDF(childName || 'Child', childAge || 8, report);
+      console.log('PDF generated successfully, size:', pdfBuffer.length, 'bytes');
+    } catch (pdfError) {
+      console.warn('PDF generation failed, continuing with email only:', pdfError);
+    }
+
     // Check if email is configured
     if (!EMAIL_USER || !EMAIL_PASS) {
       // Demo mode - return success with preview
@@ -187,6 +336,7 @@ export async function POST(request: NextRequest) {
         success: true,
         demo: true,
         message: 'Demo mode: Email would be sent to ' + email,
+        hasPDF: !!pdfBuffer,
         preview: htmlContent.substring(0, 500) + '...',
       });
     }
@@ -202,20 +352,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send email
+    // Build attachments array
+    const attachments = [];
+    if (pdfBuffer) {
+      attachments.push({
+        filename: `NeuroGen-Report-${childName || 'Child'}-${new Date().getTime()}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      });
+    }
+
+    // Send email with PDF attachment
     const info = await transporter.sendMail({
       from: `"NeuroGen Suite" <${EMAIL_FROM}>`,
       to: email,
       subject: `🧠 NeuroGen Suite - Diagnostic Report for ${childName || 'Your Child'}`,
       html: htmlContent,
+      attachments: attachments,
     });
 
     console.log('Email sent:', info.messageId);
 
     return NextResponse.json({
       success: true,
-      message: `Report sent successfully to ${email}`,
+      message: `Report sent successfully to ${email}${pdfBuffer ? ' with PDF attachment' : ''}`,
       messageId: info.messageId,
+      pdfIncluded: !!pdfBuffer,
     });
 
   } catch (error) {

@@ -23,12 +23,12 @@ const BUTTONS: ColorButton[] = [
 
 export default function SyncMaster({ onComplete }: SyncMasterProps) {
   const { addEvent, startSession, endSession, updateMetrics } = useSessionStore();
-  
+
   // Start session on mount
   useEffect(() => {
-    startSession('sync-master');
+    startSession('sync');
   }, [startSession]);
-  
+
   // Game state
   const [gamePhase, setGamePhase] = useState<'intro' | 'watch' | 'play' | 'feedback' | 'complete'>('intro');
   const [currentRound, setCurrentRound] = useState(1);
@@ -38,13 +38,13 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
   const [activeButton, setActiveButton] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState('');
-  
+
   // Metrics
   const [startTime, setStartTime] = useState<number>(0);
   const [roundMetrics, setRoundMetrics] = useState<any[]>([]);
   const [reactionTimes, setReactionTimes] = useState<number[]>([]);
   const [lastFlashTime, setLastFlashTime] = useState<number>(0);
-  
+
   // Generate sequence for round
   const generateSequence = useCallback(() => {
     const length = currentRound; // Round 1 = 1 button, Round 8 = 8 buttons
@@ -54,7 +54,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     }
     return newSeq;
   }, [currentRound]);
-  
+
   // Start game
   const startGame = () => {
     const newSeq = generateSequence();
@@ -62,16 +62,16 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     setPlayerSequence([]);
     setGamePhase('watch');
     setStartTime(Date.now());
-    
+
     addEvent({
       type: 'game-start',
       data: { round: currentRound, sequenceLength: newSeq.length }
     });
-    
+
     // Play sequence
     playSequence(newSeq);
   };
-  
+
   // Play sequence animation
   const playSequence = (seq: number[]) => {
     seq.forEach((buttonId, index) => {
@@ -91,40 +91,40 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
       }, index * 800); // 800ms between each flash
     });
   };
-  
+
   // Handle button click
   const handleButtonClick = (buttonId: number) => {
     if (gamePhase !== 'play') return;
-    
+
     const reactionTime = Date.now() - lastFlashTime;
     setReactionTimes(prev => [...prev, reactionTime]);
     setLastFlashTime(Date.now());
-    
+
     // Flash button
     setActiveButton(buttonId);
     setTimeout(() => setActiveButton(null), 200);
-    
+
     const newPlayerSeq = [...playerSequence, buttonId];
     setPlayerSequence(newPlayerSeq);
-    
+
     addEvent({
       type: 'button-click',
       data: { buttonId, position: newPlayerSeq.length, reactionTime }
     });
-    
+
     // Check if wrong
     if (buttonId !== sequence[newPlayerSeq.length - 1]) {
       // Wrong button!
       evaluateRound(newPlayerSeq, false);
       return;
     }
-    
+
     // Check if sequence complete
     if (newPlayerSeq.length === sequence.length) {
       evaluateRound(newPlayerSeq, true);
     }
   };
-  
+
   // Evaluate round
   const evaluateRound = (playerSeq: number[], perfect: boolean) => {
     const correct = playerSeq.filter((val, idx) => val === sequence[idx]).length;
@@ -132,7 +132,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     const roundScore = perfect ? sequence.length * 10 : correct * 5;
     const timeSpent = Date.now() - startTime;
     const avgReactionTime = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length;
-    
+
     setScore(prev => prev + roundScore);
     setRoundMetrics(prev => [...prev, {
       round: currentRound,
@@ -143,7 +143,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
       avgReactionTime,
       perfect
     }]);
-    
+
     // Show feedback
     setGamePhase('feedback');
     if (perfect) {
@@ -153,14 +153,14 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     } else {
       setFeedback(`💪 Keep going! ${correct}/${sequence.length} correct`);
     }
-    
+
     addEvent({
       type: 'round-complete',
       data: { round: currentRound, accuracy, perfect }
     });
-    
+
     setReactionTimes([]);
-    
+
     // Next round or complete
     setTimeout(() => {
       if (currentRound < totalRounds) {
@@ -171,16 +171,16 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
       }
     }, 2000);
   };
-  
+
   // Complete game
   const completeGame = () => {
     setGamePhase('complete');
-    
+
     const totalTime = roundMetrics.reduce((sum, m) => sum + m.timeSpent, 0);
     const avgAccuracy = roundMetrics.reduce((sum, m) => sum + m.accuracy, 0) / roundMetrics.length;
     const avgReactionTime = roundMetrics.reduce((sum, m) => sum + m.avgReactionTime, 0) / roundMetrics.length;
     const perfectRounds = roundMetrics.filter(m => m.perfect).length;
-    
+
     const metrics = {
       timeSpent: totalTime,
       accuracy: avgAccuracy,
@@ -189,10 +189,10 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
       totalRounds,
       coordinationScore: score,
     };
-    
+
     updateMetrics(metrics);
     endSession();
-    
+
     onComplete({
       ...metrics,
       roundMetrics,
@@ -209,12 +209,12 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
             <div className="text-2xl font-bold">{score} pts</div>
           </div>
         </div>
-        
+
         {/* Intro Phase */}
         {gamePhase === 'intro' && (
           <div className="text-center py-12">
             <p className="text-xl mb-8">
-              {currentRound === 1 
+              {currentRound === 1
                 ? "Watch the color sequence, then repeat it by clicking the buttons!"
                 : `Level ${currentRound} - ${currentRound} colors to remember!`}
             </p>
@@ -226,7 +226,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
             </button>
           </div>
         )}
-        
+
         {/* Watch Phase */}
         {gamePhase === 'watch' && (
           <div className="space-y-8">
@@ -251,7 +251,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
             </div>
           </div>
         )}
-        
+
         {/* Play Phase */}
         {gamePhase === 'play' && (
           <div className="space-y-8">
@@ -277,25 +277,24 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
                 </button>
               ))}
             </div>
-            
+
             {/* Progress dots */}
             <div className="flex justify-center gap-2">
               {sequence.map((_, idx) => (
                 <div
                   key={idx}
-                  className={`w-3 h-3 rounded-full ${
-                    idx < playerSequence.length
+                  className={`w-3 h-3 rounded-full ${idx < playerSequence.length
                       ? playerSequence[idx] === sequence[idx]
                         ? 'bg-green-400'
                         : 'bg-red-400'
                       : 'bg-white/30'
-                  }`}
+                    }`}
                 />
               ))}
             </div>
           </div>
         )}
-        
+
         {/* Feedback Phase */}
         {gamePhase === 'feedback' && (
           <div className="text-center py-12">
@@ -305,7 +304,7 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
             </div>
           </div>
         )}
-        
+
         {/* Complete Phase */}
         {gamePhase === 'complete' && (
           <div className="text-center py-12">

@@ -1,5 +1,6 @@
 import { BiometricMetrics } from '@/types';
 import clinicalKnowledge from './clinical-knowledge-base.json';
+import { hybridEngine } from '@/lib/ml/hybrid-diagnostic-engine';
 
 /**
  * Determine age group for baseline comparison
@@ -25,20 +26,20 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
   // Maze Game Analysis (Dysgraphia)
   if (metrics.mse !== undefined || metrics.jerkMean !== undefined) {
     const motorThreshold = clinicalKnowledge.clinicalKnowledge.dysgraphia.motor.ageBasedThresholds[ageGroup];
-    
+
     const indicators = [];
     let severity: 'normal' | 'borderline' | 'concern' = 'normal';
-    
+
     if (metrics.mse && metrics.mse > motorThreshold.mse) {
       indicators.push(`MSE of ${metrics.mse.toFixed(1)} exceeds age-appropriate threshold of ${motorThreshold.mse}`);
       severity = metrics.mse > motorThreshold.mse * 1.3 ? 'concern' : 'borderline';
     }
-    
+
     if (metrics.jerkMean && metrics.jerkMean > motorThreshold.jerk) {
       indicators.push(`Jerk coefficient of ${metrics.jerkMean.toFixed(2)} indicates movement irregularity (threshold: ${motorThreshold.jerk})`);
       severity = 'concern';
     }
-    
+
     if (indicators.length >= 2) {
       findings.push({
         condition: 'dysgraphia-motor',
@@ -52,21 +53,21 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
   // Phonic Finder Analysis (Dyslexia)
   if (metrics.phonicDelay !== undefined || metrics.phonemicSlips !== undefined) {
     const phonoThreshold = clinicalKnowledge.clinicalKnowledge.dyslexia.phonological.ageBasedThresholds[ageGroup];
-    
+
     const indicators = [];
     let severity: 'normal' | 'borderline' | 'concern' = 'normal';
-    
+
     if (metrics.phonicDelay && metrics.phonicDelay > phonoThreshold.avgResponseTime) {
       indicators.push(`Average response time of ${metrics.phonicDelay}ms exceeds ${phonoThreshold.avgResponseTime}ms threshold`);
       severity = metrics.phonicDelay > phonoThreshold.avgResponseTime * 1.2 ? 'concern' : 'borderline';
     }
-    
+
     const errorRate = metrics.phonemicSlips && metrics.totalPhonicAttempts ? metrics.phonemicSlips / metrics.totalPhonicAttempts : 0;
     if (errorRate > phonoThreshold.errorRate) {
       indicators.push(`Error rate of ${(errorRate * 100).toFixed(1)}% indicates phonological processing difficulty`);
       severity = 'concern';
     }
-    
+
     if (indicators.length >= 2) {
       findings.push({
         condition: 'dyslexia',
@@ -80,20 +81,20 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
   // Cricket Forge Analysis (Dyscalculia)
   if (metrics.subitizingThreshold !== undefined || metrics.symbolicMappingSpeed !== undefined) {
     const mathThreshold = clinicalKnowledge.clinicalKnowledge.dyscalculia.ageBasedThresholds[ageGroup];
-    
+
     const indicators = [];
     let severity: 'normal' | 'borderline' | 'concern' = 'normal';
-    
+
     if (metrics.subitizingThreshold && metrics.subitizingThreshold < 3) {
       indicators.push(`Subitizing threshold of ${metrics.subitizingThreshold} indicates number sense difficulty (expected: 3-5)`);
       severity = 'concern';
     }
-    
+
     if (metrics.symbolicMappingErrors && metrics.symbolicMappingErrors > 3) {
       indicators.push(`Symbolic mapping errors (${metrics.symbolicMappingErrors}) suggest digit-quantity connection difficulty`);
       severity = 'concern';
     }
-    
+
     if (indicators.length >= 2) {
       findings.push({
         condition: 'dyscalculia',
@@ -107,20 +108,20 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
   // Sync Master Analysis (Dyspraxia)
   if (metrics.motorLag !== undefined || metrics.rhythmAccuracy !== undefined) {
     const motorThreshold = clinicalKnowledge.clinicalKnowledge.dyspraxia.ageBasedThresholds[ageGroup];
-    
+
     const indicators = [];
     let severity: 'normal' | 'borderline' | 'concern' = 'normal';
-    
+
     if (metrics.motorLag && metrics.motorLag > motorThreshold.avgLatency) {
       indicators.push(`Average motor latency of ${metrics.motorLag}ms indicates delayed motor response (threshold: ${motorThreshold.avgLatency}ms)`);
       severity = 'borderline';
     }
-    
+
     if (metrics.rhythmAccuracy && metrics.rhythmAccuracy < 60) {
       indicators.push(`Rhythm accuracy of ${metrics.rhythmAccuracy.toFixed(1)}% shows inconsistent motor planning`);
       severity = 'concern';
     }
-    
+
     if (indicators.length >= 2) {
       findings.push({
         condition: 'dyspraxia',
@@ -134,15 +135,15 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
   // Star Mapper Analysis (NVLD)
   if (metrics.visualMemoryScore !== undefined || metrics.spatialDecay1s !== undefined) {
     const nvldThreshold = clinicalKnowledge.clinicalKnowledge.nvld.ageBasedThresholds[ageGroup];
-    
+
     const indicators = [];
     let severity: 'normal' | 'borderline' | 'concern' = 'normal';
-    
+
     if (metrics.visualMemoryScore && metrics.visualMemoryScore < 60) {
       indicators.push(`Visual memory score of ${metrics.visualMemoryScore.toFixed(1)}% below threshold`);
       severity = 'borderline';
     }
-    
+
     // Check for rapid spatial decay
     if (metrics.spatialDecay1s && metrics.spatialDecay3s) {
       const decayRate = ((metrics.spatialDecay1s - metrics.spatialDecay3s) / metrics.spatialDecay1s) * 100;
@@ -151,7 +152,7 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
         severity = 'concern';
       }
     }
-    
+
     if (indicators.length >= 2) {
       findings.push({
         condition: 'nvld',
@@ -170,7 +171,7 @@ function analyzeMetricsWithBaselines(metrics: BiometricMetrics, childAge: number
  */
 function calculateConfidence(indicatorCount: number): { level: string; explanation: string } {
   const rules = clinicalKnowledge.confidenceCalculation.rules;
-  
+
   if (indicatorCount === 1) {
     return {
       level: 'low',
@@ -218,19 +219,32 @@ const KERALA_ANALOGIES = {
 
 /**
  * Generate the diagnostic prompt for Gemini/Groq AI with RAG context
+ * NOW WITH HYBRID AI (Conventional ML + GenAI)
  */
-export function generateGeminiPrompt(
+export async function generateGeminiPrompt(
   metrics: BiometricMetrics,
   childAge: number,
   language: 'en' | 'ml' | 'hi' = 'en'
-): string {
+): Promise<string> {
   const metricsJson = JSON.stringify(metrics, null, 2);
   const ageGroup = getAgeGroup(childAge);
-  
-  // RAG: Analyze metrics against clinical baselines
+
+  // ═══════════════════════════════════════════════════════════════
+  // STAGE 1 & 2: RUN HYBRID DIAGNOSTIC ENGINE (ML + Dataset)
+  // ═══════════════════════════════════════════════════════════════
+  const hybridDiagnosis = await hybridEngine.diagnose(metrics, childAge);
+  console.log('🤖 Hybrid AI Analysis Complete:', {
+    overallRisk: hybridDiagnosis.overallRisk,
+    mlClassifications: hybridDiagnosis.mlClassifications.length,
+    datasetComparisons: hybridDiagnosis.datasetComparisons.length,
+    processingTime: `${hybridDiagnosis.processingTime.totalOffline.toFixed(2)}ms`,
+    confidence: `${(hybridDiagnosis.confidence * 100).toFixed(1)}%`
+  });
+
+  // RAG: Analyze metrics against clinical baselines (traditional method)
   const findings = analyzeMetricsWithBaselines(metrics, childAge);
   const confidenceInfo = calculateConfidence(findings.filter(f => f.severity !== 'normal').length);
-  
+
   // Extract relevant clinical knowledge based on findings
   const relevantKnowledge = findings.map(f => {
     const conditionKey = f.condition.split('-')[0] as keyof typeof clinicalKnowledge.clinicalKnowledge;
@@ -242,18 +256,42 @@ export function generateGeminiPrompt(
       severity: f.severity
     };
   });
-  
+
   const languageInstructions = {
     en: 'Write the entire report in English. Use Kerala-specific analogies from the provided examples to explain concepts.',
     ml: 'Write the action plan section in Malayalam (മലയാളം). Keep medical terms in English for clarity. Use Kerala-specific cultural references.',
     hi: 'Write the action plan section in Hindi (हिंदी). Keep medical terms in English for clarity.',
   };
 
-  const ragContext = relevantKnowledge.length > 0 ? `
-## EVIDENCE-BASED ANALYSIS (RAG - Retrieved Clinical Knowledge)
+  const ragContext = relevantKnowledge.length > 0 || hybridDiagnosis.mlClassifications.length > 0 ? `
+## EVIDENCE-BASED ANALYSIS (Hybrid AI System)
 
-### Baseline Comparison for Age Group ${ageGroup}
-Normal ranges for ${childAge}-year-old children:
+### 🤖 CONVENTIONAL ML ANALYSIS (Stage 1 - ${hybridDiagnosis.processingTime.mlStage.toFixed(2)}ms)
+Overall Risk Assessment: **${hybridDiagnosis.overallRisk}**
+System Confidence: **${(hybridDiagnosis.confidence * 100).toFixed(1)}%**
+
+${hybridDiagnosis.mlClassifications.map((ml, idx) => `
+#### ML Model ${idx + 1}: ${ml.disorder.toUpperCase()} Classifier
+- **Algorithm**: ${ml.disorder === 'dyslexia' ? 'Random Forest' : ml.disorder === 'dysgraphia' ? 'Support Vector Machine' : ml.disorder === 'dyscalculia' ? 'Decision Tree' : ml.disorder === 'dyspraxia' ? 'Neural Network' : 'K-Nearest Neighbors'}
+- **Risk Level**: ${ml.risk} (${(ml.probability * 100).toFixed(1)}% probability)
+- **Confidence**: ${(ml.confidence * 100).toFixed(1)}%
+- **Threshold Used**: ${ml.threshold}
+- **Key Features**:
+${Object.entries(ml.features).map(([k, v]) => `  - ${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`).join('\n')}
+`).join('\n')}
+
+### 📊 DATASET COMPARISON ANALYSIS (Stage 2 - ${hybridDiagnosis.processingTime.datasetStage.toFixed(2)}ms)
+${hybridDiagnosis.datasetComparisons.map((comp, idx) => `
+#### Comparison ${idx + 1}:
+- **Percentile Rank**: ${comp.percentile.toFixed(1)}th percentile
+- **Performance Band**: ${comp.rank}
+- **Reference Dataset**: ${comp.comparedTo}
+- **Z-Score**: ${comp.deviation.toFixed(2)} (${Math.abs(comp.deviation) < 1 ? 'within normal range' : Math.abs(comp.deviation) < 2 ? 'borderline' : 'significant deviation'})
+`).join('\n')}
+
+### 📚 TRADITIONAL CLINICAL BASELINE ANALYSIS
+**Age Group**: ${ageGroup} years
+**Normal Ranges for ${childAge}-year-old children:**
 ${JSON.stringify((clinicalKnowledge.normalRanges as any)[`age${ageGroup.replace('-', 'to')}`], null, 2)}
 
 ### Detected Concerns (${confidenceInfo.level.toUpperCase()} confidence)
@@ -275,16 +313,31 @@ ${item.research}
 ${typeof item.knowledge === 'object' && 'interventions' in item.knowledge ? item.knowledge.interventions.map((i: string) => `- ${i}`).join('\n') : 'See specialist for detailed plan'}
 `).join('\n')}
 
-**CRITICAL INSTRUCTION:** Use ONLY the above evidence and citations in your report. Do NOT add findings not supported by the baseline analysis.
+**CRITICAL INSTRUCTION:** Synthesize findings from ALL THREE analysis methods:
+1. Conventional ML models (Random Forest, SVM, Decision Trees, Neural Networks, KNN)
+2. Dataset comparisons (percentile rankings against clinical norms)
+3. Traditional threshold-based clinical analysis
+
+Your report MUST integrate insights from all three approaches to provide the most accurate assessment.
 ` : `
 ## POSITIVE ASSESSMENT RESULT
 
-### Baseline Comparison for Age Group ${ageGroup}
+### 🤖 CONVENTIONAL ML ANALYSIS
+Overall Risk Assessment: **${hybridDiagnosis.overallRisk}**
+All ML classifiers report LOW risk across all domains.
+
+### 📊 DATASET COMPARISON
+${hybridDiagnosis.datasetComparisons.length > 0 ?
+    `All metrics fall within typical developmental ranges (40th-60th percentile band).` :
+    `Insufficient data points for comprehensive percentile ranking.`}
+
+### 📚 TRADITIONAL BASELINE COMPARISON
+**Age Group**: ${ageGroup}
 All metrics fall within normal developmental ranges for ${childAge}-year-old children.
 
 **CRITICAL INSTRUCTION:** This child shows NO significant concerns. Generate a POSITIVE, celebratory report highlighting:
 1. Strengths observed in each game
-2. Age-appropriate performance across all metrics
+2. Age-appropriate performance across all metrics (confirmed by 3 different AI methods)
 3. Encouragement to continue supporting natural development
 4. NO specialist referrals needed
 5. Recommendation: Continue monitoring through regular play and school performance
@@ -374,13 +427,13 @@ export function parseGeminiResponse(response: string): Record<string, unknown> |
     if (jsonMatch) {
       return JSON.parse(jsonMatch[1]);
     }
-    
+
     // Try to find raw JSON object
     const rawJsonMatch = response.match(/\{[\s\S]*\}/);
     if (rawJsonMatch) {
       return JSON.parse(rawJsonMatch[0]);
     }
-    
+
     return null;
   } catch (error) {
     console.error('Failed to parse Gemini response:', error);
@@ -426,10 +479,10 @@ export function generateFallbackReport(metrics: BiometricMetrics, childAge: numb
   const findings = concernFindings.map(f => {
     const conditionKey = f.condition.split('-')[0] as keyof typeof clinicalKnowledge.clinicalKnowledge;
     const knowledge = clinicalKnowledge.clinicalKnowledge[conditionKey];
-    
+
     const analogyKey = f.condition.replace('-', '.') as any;
     let analogy = 'Further assessment will provide more specific guidance.';
-    
+
     // Navigate Kerala analogies safely
     const parts = f.condition.split('-');
     if (parts.length === 2 && KERALA_ANALOGIES[parts[0] as keyof typeof KERALA_ANALOGIES]) {

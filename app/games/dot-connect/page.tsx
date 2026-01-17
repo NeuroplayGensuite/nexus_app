@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import DotConnect from '@/components/games/DotConnect';
 import Link from 'next/link';
+import { GameErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function DotConnectPage() {
   const router = useRouter();
@@ -24,7 +25,9 @@ export default function DotConnectPage() {
       >
         ← Back
       </Link>
-      <DotConnect onComplete={handleComplete} />
+      <GameErrorBoundary gameName="Dot Connect">
+        <DotConnect onComplete={handleComplete} />
+      </GameErrorBoundary>
     </div>
   );
 }

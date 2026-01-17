@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import CricketForge from '@/components/games/CricketForge';
 import Link from 'next/link';
+import { GameErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function CricketForgePage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function CricketForgePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        <Link 
+        <Link
           href="/"
           className="inline-flex items-center text-gray-400 hover:text-white mb-6 transition"
         >
@@ -32,7 +33,9 @@ export default function CricketForgePage() {
         </Link>
 
         <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
-          <CricketForge onComplete={handleComplete} />
+          <GameErrorBoundary gameName="Pizza Party">
+            <CricketForge onComplete={handleComplete} />
+          </GameErrorBoundary>
         </div>
 
         <div className="mt-6 bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">

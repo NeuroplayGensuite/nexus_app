@@ -20,10 +20,10 @@ export function calculateJerk(coordinates: Coordinate[]): number[] {
 
   // First derivative: velocity
   const velocities = calculateDerivative(coordinates);
-  
+
   // Second derivative: acceleration
   const accelerations = calculateDerivative(velocities);
-  
+
   // Third derivative: jerk
   const jerks = calculateDerivative(accelerations);
 
@@ -41,7 +41,7 @@ function calculateDerivative(
 
   for (let i = 1; i < points.length; i++) {
     const dt = (points[i].timestamp - points[i - 1].timestamp) / 1000; // seconds
-    
+
     if (dt > 0 && dt < 1) { // Ignore large gaps
       derivatives.push({
         x: (points[i].x - points[i - 1].x) / dt,
@@ -68,46 +68,46 @@ export interface JerkAnalysis {
 
 export function analyzeJerkPatterns(jerkValues: number[]): JerkAnalysis {
   if (jerkValues.length === 0) {
-    return { 
-      mean: 0, 
-      variance: 0, 
+    return {
+      mean: 0,
+      variance: 0,
       standardDeviation: 0,
-      spikes: 0, 
+      spikes: 0,
       spikeRatio: 0,
-      tremorIndicator: 0 
+      tremorIndicator: 0
     };
   }
 
   // Calculate mean
   const mean = jerkValues.reduce((a, b) => a + b, 0) / jerkValues.length;
-  
+
   // Calculate variance
   const variance =
     jerkValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
     jerkValues.length;
-  
+
   const standardDeviation = Math.sqrt(variance);
-  
+
   // Count spikes: values > 2 standard deviations from mean
   const spikes = jerkValues.filter(
     (j) => Math.abs(j - mean) > 2 * standardDeviation
   ).length;
-  
+
   const spikeRatio = jerkValues.length > 0 ? spikes / jerkValues.length : 0;
 
   // Tremor indicator: normalized score 0-100
   // Based on spike ratio and variance
-  const tremorIndicator = Math.min(100, 
+  const tremorIndicator = Math.min(100,
     (spikeRatio * 300) + (variance / 10000)
   );
 
-  return { 
-    mean, 
-    variance, 
+  return {
+    mean,
+    variance,
     standardDeviation,
-    spikes, 
+    spikes,
     spikeRatio,
-    tremorIndicator 
+    tremorIndicator
   };
 }
 
@@ -116,10 +116,10 @@ export function analyzeJerkPatterns(jerkValues: number[]): JerkAnalysis {
  */
 export function detectDirectionChanges(coordinates: Coordinate[]): number {
   if (coordinates.length < 3) return 0;
-  
+
   let directionChanges = 0;
   const ANGLE_THRESHOLD = Math.PI / 4; // 45 degrees
-  
+
   for (let i = 2; i < coordinates.length; i++) {
     const v1 = {
       x: coordinates[i - 1].x - coordinates[i - 2].x,
@@ -129,14 +129,14 @@ export function detectDirectionChanges(coordinates: Coordinate[]): number {
       x: coordinates[i].x - coordinates[i - 1].x,
       y: coordinates[i].y - coordinates[i - 1].y,
     };
-    
+
     const angle = angleBetweenVectors(v1, v2);
-    
+
     if (Math.abs(angle) > ANGLE_THRESHOLD) {
       directionChanges++;
     }
   }
-  
+
   return directionChanges;
 }
 
@@ -147,9 +147,9 @@ function angleBetweenVectors(
   const dot = v1.x * v2.x + v1.y * v2.y;
   const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
   const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  
+
   if (mag1 === 0 || mag2 === 0) return 0;
-  
+
   const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
   return Math.acos(cosAngle);
 }
@@ -160,11 +160,23 @@ function angleBetweenVectors(
  */
 export function calculateSmoothnessScore(jerkValues: number[]): number {
   if (jerkValues.length === 0) return 100;
-  
+
   const { mean, tremorIndicator } = analyzeJerkPatterns(jerkValues);
-  
+
   // Invert: low jerk = high smoothness
   const smoothness = Math.max(0, 100 - tremorIndicator);
-  
+
   return smoothness;
+}
+
+/**
+ * Calculate tremor indicator from path coordinates
+ * Detects subtle oscillations and tremors
+ */
+export function calculateTremor(coordinates: Coordinate[]): number {
+  const jerkValues = calculateJerk(coordinates);
+  if (jerkValues.length === 0) return 0;
+
+  const { tremorIndicator } = analyzeJerkPatterns(jerkValues);
+  return tremorIndicator;
 }
