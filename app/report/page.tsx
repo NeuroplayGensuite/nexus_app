@@ -156,7 +156,7 @@ export default function ReportPage() {
   };
 
   const [reportSource, setReportSource] = useState<string>('');
-  
+
   const generateReport = async () => {
     setLoading(true);
     setError(null);
@@ -174,12 +174,12 @@ export default function ReportPage() {
       });
 
       const data = await response.json();
-      
+
       // Always get a report (API returns fallback if AI fails)
       const reportData = data.report as ReportData;
       setReport(reportData);
       setReportSource(data.source || 'local-ml');
-      
+
       // Log the source
       console.log('📊 Report generated via:', data.source);
 
@@ -223,7 +223,14 @@ export default function ReportPage() {
   const generateLocalReport = (m: BiometricMetrics): ReportData => {
     const findings: ReportData['findings'] = [];
 
-    if ((m.mse ?? 0) > 30) {
+    // Detect conditions
+    const hasDysgraphia = (m.mse ?? 0) > 30;
+    const hasDyslexia = (m.phonicDelay ?? 0) > 1500 || (m.phonemicSlips ?? 0) > 2;
+    const hasDyscalculia = m.subitizingFailed || (m.subitizingThreshold ?? 5) < 3;
+    const hasDyspraxia = (m.motorLag ?? 0) > 300 || (m.rhythmAccuracy ?? 100) < 70;
+    const hasNVLD = (m.visualMemoryScore ?? 100) < 60 || (m.spatialDecay1s ?? 0) > 30;
+
+    if (hasDysgraphia) {
       findings.push({
         condition: (m.wallHuggingRatio ?? 0) > 0.5 ? 'dysgraphia-motor' : 'dysgraphia-spatial',
         confidence: (m.mse ?? 0) > 50 ? 'high' : 'medium',
@@ -232,7 +239,7 @@ export default function ReportPage() {
       });
     }
 
-    if ((m.phonicDelay ?? 0) > 1500 || (m.phonemicSlips ?? 0) > 2) {
+    if (hasDyslexia) {
       findings.push({
         condition: 'dyslexia',
         confidence: (m.phonemicSlips ?? 0) > 3 ? 'high' : 'medium',
@@ -241,7 +248,7 @@ export default function ReportPage() {
       });
     }
 
-    if (m.subitizingFailed || (m.subitizingThreshold ?? 5) < 3) {
+    if (hasDyscalculia) {
       findings.push({
         condition: 'dyscalculia',
         confidence: m.subitizingFailed ? 'high' : 'medium',
@@ -249,6 +256,27 @@ export default function ReportPage() {
         dailyLifeImpact: 'May have difficulty with counting and basic math',
       });
     }
+
+    if (hasDyspraxia) {
+      findings.push({
+        condition: 'dyspraxia',
+        confidence: (m.motorLag ?? 0) > 400 ? 'high' : 'medium',
+        evidence: [`Motor coordination lag: ${m.motorLag}ms`],
+        dailyLifeImpact: 'May struggle with coordination and rhythm-based tasks',
+      });
+    }
+
+    if (hasNVLD) {
+      findings.push({
+        condition: 'nvld',
+        confidence: (m.visualMemoryScore ?? 100) < 50 ? 'high' : 'medium',
+        evidence: [`Visual memory score: ${m.visualMemoryScore?.toFixed(0)}%`],
+        dailyLifeImpact: 'May have difficulty with visual-spatial tasks and directions',
+      });
+    }
+
+    // Generate condition-specific action plans
+    const actionPlan = generateActionPlan(findings, childProfile?.age || 8);
 
     return {
       executiveSummary: findings.length > 0
@@ -261,17 +289,160 @@ export default function ReportPage() {
         subitizing: 'This tests instant number recognition without counting.',
         spatialDecay: 'This measures how well visual patterns are remembered over time.',
       },
-      actionPlan: {
-        week1: ['Practice tracing shapes for 10 minutes daily', 'Play counting games with toys', 'Read together for 15 minutes'],
-        week2: ['Do simple mazes and connect-the-dots', 'Practice rhythm with clapping games', 'Sort objects by size and color'],
-        week3: ['Write in a daily journal with drawings', 'Play memory card games', 'Practice skip counting'],
-        week4: ['Review progress and celebrate wins', 'Continue activities showing improvement', 'Consider professional consultation if needed'],
-      },
+      actionPlan,
       referrals: findings.length > 0
-        ? ['Educational Psychologist', 'Occupational Therapist', 'Learning Support Specialist']
+        ? getRecommendedReferrals(findings)
         : ['Continue regular developmental check-ups'],
       positiveNotes: ['Completed all games with enthusiasm', 'Showed good focus and attention'],
     };
+  };
+
+  // Generate detailed, condition-specific action plans
+  const generateActionPlan = (findings: ReportData['findings'], age: number) => {
+    const conditions = findings.map(f => f.condition);
+    
+    // Default plan for typical development
+    if (findings.length === 0) {
+      return {
+        week1: [
+          '📚 Read together for 20 minutes daily - let your child choose the book',
+          '🎨 Free drawing time - encourage creative expression without correction',
+          '🎲 Play board games that involve counting (Snakes & Ladders, Ludo)',
+          '🏃 30 minutes of outdoor physical play daily'
+        ],
+        week2: [
+          '✏️ Practice writing fun words (names of friends, pets, favorite things)',
+          '🧩 Complete age-appropriate puzzles together',
+          '🎵 Sing-along sessions with rhyming songs',
+          '⚽ Ball games to improve hand-eye coordination'
+        ],
+        week3: [
+          '📖 Visit the library - let child explore different book types',
+          '🔢 Cooking together - measuring ingredients teaches math naturally',
+          '🎭 Act out stories to build comprehension',
+          '🎯 Target games (throwing into buckets, ring toss)'
+        ],
+        week4: [
+          '🌟 Celebrate progress! Note 3 things your child improved at',
+          '📝 Create a "Things I Can Do" poster together',
+          '👨‍👩‍👧 Family game night with learning games',
+          '🗓️ Plan next month\'s activities based on interests'
+        ],
+      };
+    }
+
+    // Build condition-specific plans
+    const week1: string[] = [];
+    const week2: string[] = [];
+    const week3: string[] = [];
+    const week4: string[] = [];
+
+    // Dysgraphia activities
+    if (conditions.some(c => c.includes('dysgraphia'))) {
+      week1.push('✏️ Finger strengthening: Play with clay/playdough for 10 mins daily');
+      week1.push('📝 Large writing practice: Use chalk on pavement or markers on big paper');
+      week2.push('🎨 Tracing activities: Trace over dotted lines, shapes, then letters');
+      week2.push('✂️ Cutting practice: Cut along straight, then curved lines');
+      week3.push('📓 Structured writing: Use paper with raised lines or textured guides');
+      week3.push('🖊️ Grip helpers: Try pencil grips or thicker writing tools');
+      week4.push('📊 Track handwriting: Keep samples weekly to see improvement');
+    }
+
+    // Dyslexia activities
+    if (conditions.includes('dyslexia')) {
+      week1.push('🔊 Sound games: "What starts with the same sound as CAT?"');
+      week1.push('📖 Audiobooks: Listen while following along in the book');
+      week2.push('🎵 Rhyming songs: Learn nursery rhymes, find rhyming words');
+      week2.push('🔤 Letter-sound matching: Use flashcards with pictures');
+      week3.push('📚 Reading buddy: Take turns reading sentences aloud');
+      week3.push('🎯 Word families: bat, cat, hat, mat - spot the pattern');
+      week4.push('📝 Personal dictionary: Write new words with pictures');
+    }
+
+    // Dyscalculia activities
+    if (conditions.includes('dyscalculia')) {
+      week1.push('🔢 Counting objects: Count toys, snacks, steps - make it real');
+      week1.push('🎲 Dice games: Roll and count dots without calculating');
+      week2.push('🍕 Pizza math: "How many slices? If we eat 2, how many left?"');
+      week2.push('📏 Measuring fun: Use rulers, cups, spoons for cooking');
+      week3.push('💰 Money games: Play shop with real coins (supervised)');
+      week3.push('🔢 Number lines: Jump on a floor number line, count steps');
+      week4.push('🎮 Math apps: Try visual math games (Khan Academy Kids, Moose Math)');
+    }
+
+    // Dyspraxia activities
+    if (conditions.includes('dyspraxia')) {
+      week1.push('🤸 Simple stretches: 5-minute morning routine together');
+      week1.push('🎵 Clapping games: Pat-a-cake, follow rhythm patterns');
+      week2.push('⚽ Balloon games: Keep balloon in air - no pressure on catching');
+      week2.push('🧱 Building blocks: Stack, balance, knock down - repeat');
+      week3.push('🎯 Target practice: Throw soft balls into laundry baskets');
+      week3.push('🕺 Dance time: Follow simple dance videos together');
+      week4.push('🏃 Obstacle course: Set up simple home course with pillows, chairs');
+    }
+
+    // NVLD activities
+    if (conditions.includes('nvld')) {
+      week1.push('🗺️ Map games: Draw a simple map of your home together');
+      week1.push('🧩 Pattern blocks: Copy simple designs with colored blocks');
+      week2.push('📦 Organization: Sort toys by type, size, or color together');
+      week2.push('🎨 Copy drawings: "Draw what I draw" - start with simple shapes');
+      week3.push('🔍 I Spy games: "Find something square" - build visual scanning');
+      week3.push('📍 Direction games: "Take 3 steps forward, turn left"');
+      week4.push('🎪 Memory games: Start with 4 cards, gradually increase');
+    }
+
+    // Ensure each week has activities
+    const defaultActivities = [
+      '🌟 Praise effort, not just results - "I love how hard you tried!"',
+      '😊 Keep sessions short (10-15 mins) and fun - stop before frustration',
+      '🎉 Celebrate small wins daily - high fives, stickers, or special time together',
+      '💬 Talk to your child\'s teacher about classroom accommodations',
+    ];
+
+    // Fill in any gaps
+    while (week1.length < 4) week1.push(defaultActivities[week1.length % defaultActivities.length]);
+    while (week2.length < 4) week2.push(defaultActivities[week2.length % defaultActivities.length]);
+    while (week3.length < 4) week3.push(defaultActivities[week3.length % defaultActivities.length]);
+    while (week4.length < 4) week4.push(defaultActivities[week4.length % defaultActivities.length]);
+
+    return {
+      week1: week1.slice(0, 4),
+      week2: week2.slice(0, 4),
+      week3: week3.slice(0, 4),
+      week4: week4.slice(0, 4),
+    };
+  };
+
+  // Get condition-specific referrals
+  const getRecommendedReferrals = (findings: ReportData['findings']): string[] => {
+    const referrals: string[] = [];
+    const conditions = findings.map(f => f.condition);
+
+    if (conditions.some(c => c.includes('dysgraphia'))) {
+      referrals.push('Occupational Therapist - for handwriting and fine motor skills');
+    }
+    if (conditions.includes('dyslexia')) {
+      referrals.push('Educational Psychologist - for reading assessment');
+      referrals.push('Speech-Language Pathologist - for phonological processing');
+    }
+    if (conditions.includes('dyscalculia')) {
+      referrals.push('Educational Psychologist - specializing in math learning');
+      referrals.push('Learning Support Specialist - for math interventions');
+    }
+    if (conditions.includes('dyspraxia')) {
+      referrals.push('Occupational Therapist - for motor coordination');
+      referrals.push('Physiotherapist - for gross motor skills');
+    }
+    if (conditions.includes('nvld')) {
+      referrals.push('Neuropsychologist - for comprehensive assessment');
+      referrals.push('Occupational Therapist - for visual-spatial skills');
+    }
+
+    // Always include
+    referrals.push('Developmental Pediatrician - for overall evaluation');
+
+    return [...new Set(referrals)]; // Remove duplicates
   };
 
   const handlePrint = () => {
@@ -339,11 +510,10 @@ export default function ReportPage() {
             Based on {completedGames.size}/5 games completed
           </p>
           {reportSource && (
-            <div className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full text-sm ${
-              reportSource.includes('local') || reportSource.includes('fallback')
+            <div className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full text-sm ${reportSource.includes('local') || reportSource.includes('fallback')
                 ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
                 : 'bg-green-900/50 text-green-300 border border-green-700'
-            }`}>
+              }`}>
               {reportSource.includes('local') || reportSource.includes('fallback') ? (
                 <>
                   <span>🧠</span> Local ML Analysis
@@ -620,8 +790,8 @@ export default function ReportPage() {
                     key={week}
                     onClick={() => setActiveWeek(week)}
                     className={`px-4 py-2 rounded-lg font-bold transition ${activeWeek === week
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
                       }`}
                   >
                     Week {week}

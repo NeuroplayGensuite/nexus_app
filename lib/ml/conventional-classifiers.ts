@@ -72,7 +72,7 @@ export class DyslexiaClassifier {
 
     predict(features: BiometricFeatures): ClassificationResult {
         const ageFactor = this.getAgeFactor(features.age_months || 72);
-        
+
         let weightedScore = 0;
         let totalWeight = 0;
 
@@ -125,12 +125,12 @@ export class DyslexiaClassifier {
 
     private checkFeatureAgreement(features: BiometricFeatures, ageFactor: number): number {
         let agreementCount = 0;
-        
+
         if ((features.phonemic_latency_ms || 0) > 1200 * ageFactor) agreementCount++;
         if ((features.visual_auditory_error_rate || 0) > 18) agreementCount++;
         if ((features.rhyme_detection_accuracy || 100) < 70) agreementCount++;
         if ((features.phonemic_slips || 0) > 2) agreementCount++;
-        
+
         return agreementCount / 4;
     }
 }
@@ -176,7 +176,7 @@ export class DysgraphiaClassifier {
         }
 
         // Add quadratic terms for non-linearity (RBF approximation)
-        const quadraticBoost = 
+        const quadraticBoost =
             0.08 * Math.pow(normalized.mse || 0, 2) +
             0.12 * Math.pow(normalized.tremor_indicator || 0, 2) +
             0.06 * Math.pow(normalized.wall_hugging_percentage || 0, 2);
@@ -245,10 +245,10 @@ export class DyscalculiaClassifier {
         // Find closest age norm with interpolation
         const age = features.age_months || 72;
         const ageKeys = Object.keys(this.ageNorms).map(Number).sort((a, b) => a - b);
-        
+
         let lowerAge = ageKeys[0];
         let upperAge = ageKeys[ageKeys.length - 1];
-        
+
         for (let i = 0; i < ageKeys.length - 1; i++) {
             if (age >= ageKeys[i] && age < ageKeys[i + 1]) {
                 lowerAge = ageKeys[i];
@@ -256,12 +256,12 @@ export class DyscalculiaClassifier {
                 break;
             }
         }
-        
+
         // Linear interpolation for smoother age transitions
         const lowerNorm = this.ageNorms[lowerAge];
         const upperNorm = this.ageNorms[upperAge];
         const t = upperAge === lowerAge ? 0 : (age - lowerAge) / (upperAge - lowerAge);
-        
+
         const norm = {
             subitizing: lowerNorm.subitizing + t * (upperNorm.subitizing - lowerNorm.subitizing),
             threshold: lowerNorm.threshold + t * (upperNorm.threshold - lowerNorm.threshold),
@@ -463,10 +463,10 @@ export class NVLDClassifier {
         const probability = distanceToTypical / totalDistance;
 
         // Check decay pattern consistency (higher decay over time is concerning)
-        const decayConsistency = 
+        const decayConsistency =
             (featureVector.spatial_decay_3s > featureVector.spatial_decay_1s ? 0.1 : 0) +
             (featureVector.spatial_decay_5s > featureVector.spatial_decay_3s ? 0.1 : 0);
-        
+
         const adjustedProbability = Math.min(1, probability + decayConsistency);
 
         let risk: 'LOW' | 'MODERATE' | 'HIGH';

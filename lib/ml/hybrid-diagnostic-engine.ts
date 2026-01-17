@@ -69,7 +69,7 @@ interface HybridDiagnosticReport {
 
     confidence: number;
     timestamp: number;
-    
+
     // New: Data completeness indicator
     gamesPlayed: number;
     dataCompleteness: 'COMPLETE' | 'PARTIAL' | 'MINIMAL';
@@ -111,7 +111,7 @@ export class HybridDiagnosticEngine {
 
         // Calculate confidence (based on agreement between classifiers and data completeness)
         let confidence = this.calculateConfidence(mlClassifications, datasetComparisons);
-        
+
         // Apply confidence penalty for incomplete data
         if (dataCompleteness === 'PARTIAL') {
             confidence *= 0.85;
@@ -147,22 +147,22 @@ export class HybridDiagnosticEngine {
      */
     private countGamesWithData(metrics: BiometricMetrics): number {
         let count = 0;
-        
+
         // Phonic Finder (Dyslexia)
         if (metrics.phonicDelay !== undefined && metrics.phonicDelay > 0) count++;
-        
+
         // Maze (Dysgraphia)
         if (metrics.mse !== undefined && metrics.mse > 0) count++;
-        
+
         // Pizza Party (Dyscalculia)
         if (metrics.subitizingThreshold !== undefined) count++;
-        
+
         // Sync Master (Dyspraxia)
         if (metrics.rhythmAccuracy !== undefined) count++;
-        
+
         // Star Mapper (NVLD)
         if (metrics.spatialDecay1s !== undefined) count++;
-        
+
         return count;
     }
 
@@ -272,7 +272,7 @@ export class HybridDiagnosticEngine {
                 validCount++;
             }
         }
-        
+
         const ratio = validCount / keyFeatures.length;
         if (ratio >= 0.8) return 'HIGH';
         if (ratio >= 0.5) return 'MEDIUM';
@@ -380,7 +380,7 @@ export class HybridDiagnosticEngine {
         for (const c of classifications) {
             let riskScore = c.risk === 'HIGH' ? 3 : c.risk === 'MODERATE' ? 2 : 1;
             let weight = c.dataQuality === 'HIGH' ? 1.0 : c.dataQuality === 'MEDIUM' ? 0.7 : 0.4;
-            
+
             weightedRiskSum += riskScore * weight;
             totalWeight += weight;
         }

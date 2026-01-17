@@ -368,7 +368,7 @@ async function handleReportGeneration(body: {
 
   // Check if any API keys are configured
   const hasApiKeys = CEREBRAS_API_KEY || GROQ_API_KEY || TOGETHER_API_KEY || GEMINI_API_KEY;
-  
+
   if (!hasApiKeys) {
     console.log('📋 No AI API keys configured - using local ML report');
     return NextResponse.json({
