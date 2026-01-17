@@ -1,9 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useWebcam } from '@/hooks/useWebcam';
-import { useAudioInput } from '@/hooks/useAudioInput';
-import { useMediaStore } from '@/lib/media-capture/media-store';
 
 interface MediaCaptureProps {
     gameType?: string;
@@ -22,208 +19,298 @@ export default function MediaCapture({
     autoStart = false,
     className = '',
 }: MediaCaptureProps) {
-    const { videoRef, state: webcamState, startWebcam, stopWebcam } = useWebcam();
-    const { state: audioState, startAudio, stopAudio } = useAudioInput();
-    const { startCapture, stopCapture, addAudioLevel, isCapturing } = useMediaStore();
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
     
-    const [minimized, setMinimized] = useState(false);
     const [mounted, setMounted] = useState(false);
-    const lastVolumeRef = useRef(0);
+    const [minimized, setMinimized] = useState(false);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [webcamActive, setWebcamActive] = useState(false);
+    const [audioActive, setAudioActive] = useState(false);
+    const [audioLevel, setAudioLevel] = useState(0);
+    const [error, setError] = useState<string | null>(null);
+    const [permissionDenied, setPermissionDenied] = useState(false);
 
     useEffect(() => {
         setMounted(true);
+        return () => {
+            // Cleanup on unmount
+            stopAllMedia();
+        };
     }, []);
 
-    // Track audio levels for analytics
+    // Auto-start if requested
     useEffect(() => {
-        if (audioState.isActive && isCapturing) {
-            const normalizedVolume = audioState.volume * 100;
-            // Only store if changed significantly
-            if (Math.abs(normalizedVolume - lastVolumeRef.current) > 2) {
-                addAudioLevel(normalizedVolume);
-                lastVolumeRef.current = normalizedVolume;
-            }
-        }
-    }, [audioState.volume, audioState.isActive, isCapturing, addAudioLevel]);
-
-    useEffect(() => {
-        if (mounted && autoStart) {
+        if (mounted && autoStart && !isCapturing) {
             handleStartMedia();
         }
-        return () => {
-            handleStopMedia();
-        };
     }, [mounted, autoStart]);
 
-    const handleStartMedia = useCallback(async () => {
-        try {
-            await startWebcam();
-            await startAudio();
-            startCapture(gameType);
-            onWebcamReady?.();
-            onAudioReady?.();
-        } catch (err) {
-            console.error('Failed to start media:', err);
+    // Audio level monitoring
+    useEffect(() => {
+        if (!audioActive || !analyserRef.current) return;
+
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        let animationId: number;
+
+        const updateLevel = () => {
+            if (analyserRef.current) {
+                analyserRef.current.getByteFrequencyData(dataArray);
+                const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                setAudioLevel(Math.min(avg / 128, 1));
+            }
+            animationId = requestAnimationFrame(updateLevel);
+        };
+
+        updateLevel();
+
+        return () => {
+            cancelAnimationFrame(animationId);
+        };
+    }, [audioActive]);
+
+    const stopAllMedia = useCallback(() => {
+        // Stop video tracks
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => {
+                track.stop();
+            });
+            streamRef.current = null;
         }
-    }, [startWebcam, startAudio, startCapture, gameType, onWebcamReady, onAudioReady]);
+
+        // Clear video element
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+
+        // Close audio context
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+
+        setWebcamActive(false);
+        setAudioActive(false);
+        setIsCapturing(false);
+        setAudioLevel(0);
+    }, []);
+
+    const handleStartMedia = useCallback(async () => {
+        setError(null);
+        setPermissionDenied(false);
+
+        try {
+            // Request both video and audio
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 320 },
+                    height: { ideal: 240 },
+                    facingMode: 'user',
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                },
+            });
+
+            streamRef.current = stream;
+
+            // Set up video
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                try {
+                    await videoRef.current.play();
+                    setWebcamActive(true);
+                    onWebcamReady?.();
+                    console.log(`📹 Camera started for: ${gameType}`);
+                } catch (playErr) {
+                    console.error('Video play error:', playErr);
+                }
+            }
+
+            // Set up audio analysis
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                const audioContext = new AudioContext();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                audioContextRef.current = audioContext;
+                analyserRef.current = analyser;
+                setAudioActive(true);
+                onAudioReady?.();
+                console.log(`🎤 Audio started for: ${gameType}`);
+            }
+
+            setIsCapturing(true);
+
+        } catch (err: unknown) {
+            console.error('Media error:', err);
+            
+            const errorObj = err as { name?: string; message?: string };
+            
+            if (errorObj.name === 'NotAllowedError' || errorObj.name === 'PermissionDeniedError') {
+                setPermissionDenied(true);
+                setError('Camera/mic permission denied. Please allow access.');
+            } else if (errorObj.name === 'NotFoundError') {
+                setError('No camera or microphone found.');
+            } else if (errorObj.name === 'NotReadableError') {
+                setError('Camera is in use by another app.');
+            } else {
+                setError(errorObj.message || 'Failed to start media');
+            }
+        }
+    }, [gameType, onWebcamReady, onAudioReady]);
 
     const handleStopMedia = useCallback(() => {
-        const metrics = stopCapture();
-        stopWebcam();
-        stopAudio();
-        
-        if (metrics) {
-            console.log('📊 Captured session:', {
-                game: metrics.gameType,
-                engagement: `${metrics.engagementScore.toFixed(0)}%`,
-            });
-        }
-    }, [stopCapture, stopWebcam, stopAudio]);
+        stopAllMedia();
+        console.log(`⏹️ Media stopped for: ${gameType}`);
+    }, [stopAllMedia, gameType]);
 
     if (!mounted) return null;
 
-    // Minimized floating indicator
-    if (minimized && (webcamState.isActive || audioState.isActive)) {
+    // Minimized view
+    if (minimized && isCapturing) {
         return (
             <button
                 onClick={() => setMinimized(false)}
-                className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-slate-800/90 backdrop-blur-sm border border-slate-600 rounded-full shadow-lg hover:bg-slate-700 transition ${className}`}
+                className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-slate-800/90 backdrop-blur border border-slate-600 rounded-full shadow-lg hover:bg-slate-700 transition ${className}`}
             >
-                {webcamState.isActive && (
-                    <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                        <span className="text-xs text-gray-300">📷</span>
-                    </span>
-                )}
-                {audioState.isActive && (
-                    <span className="flex items-center gap-1">
-                        <span
-                            className="w-2 h-2 bg-green-500 rounded-full"
-                            style={{ opacity: 0.3 + audioState.volume * 0.7 }}
-                        />
-                        <span className="text-xs text-gray-300">🎤</span>
-                    </span>
-                )}
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <span className="text-xs text-white">Recording</span>
+                {webcamActive && <span>📷</span>}
+                {audioActive && <span>🎤</span>}
             </button>
         );
     }
 
     return (
         <div
-            className={`fixed bottom-4 right-4 z-50 bg-slate-800/95 backdrop-blur-sm border border-slate-600 rounded-xl shadow-2xl overflow-hidden ${className}`}
-            style={{ width: showPreview && webcamState.isActive ? '220px' : 'auto' }}
+            className={`fixed bottom-4 right-4 z-50 bg-slate-800/95 backdrop-blur border border-slate-600 rounded-xl shadow-2xl overflow-hidden ${className}`}
+            style={{ width: showPreview && webcamActive ? '240px' : '200px' }}
         >
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 bg-slate-700/50 border-b border-slate-600">
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-300">📹 Media Capture</span>
+                    <span className="text-xs font-bold text-white">📹 Media</span>
                     {isCapturing && (
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                            <span className="text-xs text-red-400">REC</span>
+                        </span>
                     )}
                 </div>
-                <div className="flex items-center gap-1">
-                    {(webcamState.isActive || audioState.isActive) && (
-                        <button
-                            onClick={() => setMinimized(true)}
-                            className="p-1 text-gray-400 hover:text-white transition"
-                            title="Minimize"
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </button>
-                    )}
-                </div>
+                {isCapturing && (
+                    <button
+                        onClick={() => setMinimized(true)}
+                        className="p-1 text-gray-400 hover:text-white"
+                        title="Minimize"
+                    >
+                        ─
+                    </button>
+                )}
             </div>
 
             {/* Video Preview */}
-            {showPreview && webcamState.isActive && (
-                <div className="relative">
+            {showPreview && (
+                <div className="relative bg-black">
                     <video
                         ref={videoRef}
                         autoPlay
                         muted
                         playsInline
-                        className="w-full h-auto transform scale-x-[-1]"
+                        className={`w-full h-auto transform scale-x-[-1] ${webcamActive ? 'block' : 'hidden'}`}
+                        style={{ maxHeight: '180px' }}
                     />
-                    <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-red-600/80 rounded text-xs text-white">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                        LIVE
-                    </div>
-                    {/* Game type indicator */}
-                    <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-blue-600/80 rounded text-xs text-white">
-                        {gameType}
-                    </div>
+                    {!webcamActive && (
+                        <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
+                            📷 Camera off
+                        </div>
+                    )}
+                    {webcamActive && (
+                        <>
+                            <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600/80 rounded text-xs text-white flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                                LIVE
+                            </div>
+                            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-blue-600/80 rounded text-xs text-white">
+                                {gameType}
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
-            {/* Status & Controls */}
-            <div className="p-3 space-y-2">
-                {/* Status indicators */}
+            {/* Controls */}
+            <div className="p-3 space-y-3">
+                {/* Status */}
                 <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-3">
-                        <span className={`flex items-center gap-1 ${webcamState.isActive ? 'text-green-400' : 'text-gray-500'}`}>
-                            📷 {webcamState.isActive ? 'On' : 'Off'}
-                        </span>
-                        <span className={`flex items-center gap-1 ${audioState.isActive ? 'text-green-400' : 'text-gray-500'}`}>
-                            🎤 {audioState.isActive ? 'On' : 'Off'}
-                        </span>
-                    </div>
-                    {isCapturing && (
-                        <span className="text-cyan-400 text-xs">Recording...</span>
-                    )}
+                    <span className={webcamActive ? 'text-green-400' : 'text-gray-500'}>
+                        📷 {webcamActive ? 'On' : 'Off'}
+                    </span>
+                    <span className={audioActive ? 'text-green-400' : 'text-gray-500'}>
+                        🎤 {audioActive ? 'On' : 'Off'}
+                    </span>
                 </div>
 
-                {/* Audio level meter */}
-                {audioState.isActive && (
+                {/* Audio Meter */}
+                {audioActive && (
                     <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-500">
-                            <span>Audio Level</span>
-                            <span className="text-cyan-400">{(audioState.volume * 100).toFixed(0)}%</span>
+                        <div className="flex justify-between text-xs text-gray-400">
+                            <span>Audio</span>
+                            <span>{(audioLevel * 100).toFixed(0)}%</span>
                         </div>
                         <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                             <div
                                 className={`h-full transition-all duration-75 ${
-                                    audioState.volume > 0.7 ? 'bg-red-500' :
-                                    audioState.volume > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
+                                    audioLevel > 0.7 ? 'bg-red-500' :
+                                    audioLevel > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
                                 }`}
-                                style={{ width: `${audioState.volume * 100}%` }}
+                                style={{ width: `${audioLevel * 100}%` }}
                             />
                         </div>
                     </div>
                 )}
 
-                {/* Error messages */}
-                {(webcamState.error || audioState.error) && (
-                    <p className="text-xs text-red-400 bg-red-900/30 rounded p-2">
-                        ⚠️ {webcamState.error || audioState.error}
-                    </p>
+                {/* Error */}
+                {error && (
+                    <div className="text-xs text-red-400 bg-red-900/30 rounded p-2">
+                        ⚠️ {error}
+                        {permissionDenied && (
+                            <div className="mt-1 text-gray-400">
+                                Click the camera icon in your browser&apos;s address bar to allow access.
+                            </div>
+                        )}
+                    </div>
                 )}
 
-                {/* Control buttons */}
+                {/* Buttons */}
                 <div className="flex gap-2">
-                    {!webcamState.isActive && !audioState.isActive ? (
+                    {!isCapturing ? (
                         <button
                             onClick={handleStartMedia}
-                            className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-lg hover:from-green-400 hover:to-emerald-500 transition flex items-center justify-center gap-1"
+                            className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1"
                         >
-                            <span>▶️</span> Start Capture
+                            ▶️ Start
                         </button>
                     ) : (
                         <button
                             onClick={handleStopMedia}
-                            className="flex-1 px-3 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white text-xs font-bold rounded-lg hover:from-red-400 hover:to-rose-500 transition flex items-center justify-center gap-1"
+                            className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1"
                         >
-                            <span>⏹️</span> Stop
+                            ⏹️ Stop
                         </button>
                     )}
                 </div>
 
-                {/* Privacy note */}
-                <div className="text-center">
-                    <span className="text-xs text-gray-500">
-                        🔒 Data stays on your device
-                    </span>
+                {/* Privacy */}
+                <div className="text-center text-xs text-gray-500">
+                    🔒 Video not saved - local only
                 </div>
             </div>
         </div>
