@@ -23,7 +23,7 @@ export default function MediaCapture({
     const streamRef = useRef<MediaStream | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
-    
+
     const [mounted, setMounted] = useState(false);
     const [minimized, setMinimized] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
@@ -37,7 +37,7 @@ export default function MediaCapture({
     // Check if devices exist on mount
     useEffect(() => {
         setMounted(true);
-        
+
         // Check for available devices
         const checkDevices = async () => {
             try {
@@ -45,12 +45,12 @@ export default function MediaCapture({
                     setHasDevices(false);
                     return;
                 }
-                
+
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const hasVideo = devices.some(d => d.kind === 'videoinput');
                 const hasAudio = devices.some(d => d.kind === 'audioinput');
                 setHasDevices(hasVideo || hasAudio);
-                
+
                 if (!hasVideo && !hasAudio) {
                     console.log('📷 No camera/mic detected - media capture disabled');
                 }
@@ -58,9 +58,9 @@ export default function MediaCapture({
                 setHasDevices(false);
             }
         };
-        
+
         checkDevices();
-        
+
         return () => {
             stopAllMedia();
         };
@@ -98,7 +98,7 @@ export default function MediaCapture({
             videoRef.current.srcObject = null;
         }
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current.close().catch(() => { });
             audioContextRef.current = null;
         }
         analyserRef.current = null;
@@ -114,7 +114,7 @@ export default function MediaCapture({
         try {
             // Try video + audio first
             let stream: MediaStream;
-            
+
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
@@ -172,7 +172,7 @@ export default function MediaCapture({
 
         } catch (err: unknown) {
             const errorObj = err as { name?: string; message?: string };
-            
+
             if (errorObj.name === 'NotAllowedError') {
                 setError('Permission denied. Click 🔒 in address bar to allow.');
             } else if (errorObj.name === 'NotFoundError') {
@@ -309,10 +309,9 @@ export default function MediaCapture({
                 {audioActive && (
                     <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
                         <div
-                            className={`h-full transition-all duration-75 ${
-                                audioLevel > 0.7 ? 'bg-red-500' :
-                                audioLevel > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}
+                            className={`h-full transition-all duration-75 ${audioLevel > 0.7 ? 'bg-red-500' :
+                                    audioLevel > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
+                                }`}
                             style={{ width: `${Math.max(audioLevel * 100, 5)}%` }}
                         />
                     </div>

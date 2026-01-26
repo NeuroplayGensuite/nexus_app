@@ -64,21 +64,40 @@ export default function ProfilePage() {
     router.push('/');
   };
 
+  // Pre-defined particle positions to avoid hydration mismatch
+  const particles = [
+    { w: 52, h: 99, l: 43, t: 47, delay: 6.6, dur: 19.5 },
+    { w: 74, h: 77, l: 91, t: 20, delay: 2.8, dur: 14.9 },
+    { w: 49, h: 101, l: 50, t: 84, delay: 12.5, dur: 18.9 },
+    { w: 46, h: 65, l: 99, t: 65, delay: 11.3, dur: 16.9 },
+    { w: 91, h: 43, l: 38, t: 65, delay: 9.3, dur: 14.8 },
+    { w: 93, h: 60, l: 81, t: 91, delay: 5.2, dur: 14.0 },
+    { w: 78, h: 88, l: 1, t: 33, delay: 4.7, dur: 15.2 },
+    { w: 108, h: 76, l: 9, t: 25, delay: 3.4, dur: 17.1 },
+    { w: 63, h: 46, l: 50, t: 30, delay: 14.9, dur: 16.9 },
+    { w: 77, h: 66, l: 38, t: 50, delay: 4.2, dur: 13.3 },
+    { w: 54, h: 88, l: 33, t: 15, delay: 8.2, dur: 16.7 },
+    { w: 119, h: 93, l: 88, t: 54, delay: 2.0, dur: 12.3 },
+    { w: 114, h: 80, l: 83, t: 99, delay: 2.8, dur: 18.5 },
+    { w: 97, h: 108, l: 9, t: 14, delay: 1.4, dur: 16.6 },
+    { w: 90, h: 102, l: 7, t: 57, delay: 0.9, dur: 18.0 },
+  ];
+
   return (
     <main className="min-h-screen animated-gradient relative overflow-hidden p-4 md:p-8">
       {/* Animated Particles Background */}
       <div className="particles-bg">
-        {[...Array(15)].map((_, i) => (
+        {particles.map((p, i) => (
           <div
             key={i}
             className="particle"
             style={{
-              width: `${Math.random() * 80 + 40}px`,
-              height: `${Math.random() * 80 + 40}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
+              width: `${p.w}px`,
+              height: `${p.h}px`,
+              left: `${p.l}%`,
+              top: `${p.t}%`,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.dur}s`,
             }}
           />
         ))}
@@ -102,10 +121,10 @@ export default function ProfilePage() {
             <div key={s} className="flex flex-col items-center gap-2">
               <div
                 className={`w-4 h-4 rounded-full transition-all duration-500 ${s === step
-                    ? 'bg-yellow-400 scale-150 neon-glow-purple shadow-2xl'
-                    : s < step
-                      ? 'bg-green-400 scale-110 shadow-lg shadow-green-400/50'
-                      : 'bg-white/20 scale-100'
+                  ? 'bg-yellow-400 scale-150 neon-glow-purple shadow-2xl'
+                  : s < step
+                    ? 'bg-green-400 scale-110 shadow-lg shadow-green-400/50'
+                    : 'bg-white/20 scale-100'
                   }`}
               />
               <span className={`text-xs font-bold ${s === step ? 'text-yellow-400' : s < step ? 'text-green-400' : 'text-white/40'
@@ -190,8 +209,8 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => setGrade(g)}
                       className={`py-3 px-4 rounded-xl text-sm font-black transition-all ${grade === g
-                          ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-xl shadow-yellow-500/50'
-                          : 'glass-card text-white hover:scale-105 border border-purple-500/20'
+                        ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-xl shadow-yellow-500/50'
+                        : 'glass-card text-white hover:scale-105 border border-purple-500/20'
                         }`}
                     >
                       {g}
@@ -237,8 +256,8 @@ export default function ProfilePage() {
                   onClick={() => toggleInterest(interest.name)}
                   disabled={!interests.includes(interest.name) && interests.length >= 5}
                   className={`flex flex-col items-center justify-center p-5 rounded-2xl transition-all duration-300 ${interests.includes(interest.name)
-                      ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-2xl shadow-yellow-500/50 neon-glow-purple'
-                      : 'glass-card text-white hover:scale-105 border border-purple-500/20 disabled:opacity-30 disabled:cursor-not-allowed'
+                    ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-purple-900 scale-110 shadow-2xl shadow-yellow-500/50 neon-glow-purple'
+                    : 'glass-card text-white hover:scale-105 border border-purple-500/20 disabled:opacity-30 disabled:cursor-not-allowed'
                     }`}
                 >
                   <span className="text-4xl mb-2 transform transition-transform duration-300 hover:scale-125">
@@ -291,8 +310,8 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setPreferredLanguage('en')}
                     className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'en'
-                        ? 'bg-yellow-400 text-purple-900'
-                        : 'bg-white/20 text-white hover:bg-white/30'
+                      ? 'bg-yellow-400 text-purple-900'
+                      : 'bg-white/20 text-white hover:bg-white/30'
                       }`}
                   >
                     🇬🇧 English
@@ -301,8 +320,8 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setPreferredLanguage('ml')}
                     className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'ml'
-                        ? 'bg-yellow-400 text-purple-900'
-                        : 'bg-white/20 text-white hover:bg-white/30'
+                      ? 'bg-yellow-400 text-purple-900'
+                      : 'bg-white/20 text-white hover:bg-white/30'
                       }`}
                   >
                     🇮🇳 മലയാളം
@@ -311,8 +330,8 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setPreferredLanguage('hi')}
                     className={`py-4 rounded-xl font-medium transition-all ${preferredLanguage === 'hi'
-                        ? 'bg-yellow-400 text-purple-900'
-                        : 'bg-white/20 text-white hover:bg-white/30'
+                      ? 'bg-yellow-400 text-purple-900'
+                      : 'bg-white/20 text-white hover:bg-white/30'
                       }`}
                   >
                     🇮🇳 हिंदी

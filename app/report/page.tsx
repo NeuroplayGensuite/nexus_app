@@ -300,7 +300,7 @@ export default function ReportPage() {
   // Generate detailed, condition-specific action plans
   const generateActionPlan = (findings: ReportData['findings'], age: number) => {
     const conditions = findings.map(f => f.condition);
-    
+
     // Default plan for typical development
     if (findings.length === 0) {
       return {
@@ -511,8 +511,8 @@ export default function ReportPage() {
           </p>
           {reportSource && (
             <div className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full text-sm ${reportSource.includes('local') || reportSource.includes('fallback')
-                ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
-                : 'bg-green-900/50 text-green-300 border border-green-700'
+              ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
+              : 'bg-green-900/50 text-green-300 border border-green-700'
               }`}>
               {reportSource.includes('local') || reportSource.includes('fallback') ? (
                 <>

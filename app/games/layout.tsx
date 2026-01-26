@@ -12,7 +12,7 @@ export default function GamesLayout({
 }) {
     const addEvent = useSessionStore((state) => state.addEvent);
     const pathname = usePathname();
-    
+
     // Extract game type from pathname (e.g., /games/maze → maze)
     const gameType = useMemo(() => {
         const parts = pathname.split('/');

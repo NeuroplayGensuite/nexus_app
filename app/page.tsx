@@ -77,6 +77,30 @@ export default function Home() {
   const completedGames = new Set(allSessions.map(s => s.gameType));
   const allGamesComplete = completedGames.size === 6;
 
+  // Pre-defined particle positions to avoid hydration mismatch
+  const homeParticles = [
+    { w: 120, h: 95, l: 10, t: 20, delay: 2, dur: 18 },
+    { w: 80, h: 110, l: 25, t: 60, delay: 5, dur: 22 },
+    { w: 95, h: 75, l: 45, t: 15, delay: 8, dur: 17 },
+    { w: 130, h: 85, l: 70, t: 40, delay: 1, dur: 20 },
+    { w: 70, h: 120, l: 85, t: 75, delay: 12, dur: 19 },
+    { w: 100, h: 90, l: 5, t: 80, delay: 3, dur: 21 },
+    { w: 85, h: 105, l: 35, t: 35, delay: 7, dur: 16 },
+    { w: 110, h: 70, l: 55, t: 85, delay: 15, dur: 23 },
+    { w: 75, h: 115, l: 90, t: 10, delay: 4, dur: 18 },
+    { w: 125, h: 80, l: 15, t: 50, delay: 10, dur: 20 },
+    { w: 90, h: 100, l: 60, t: 25, delay: 6, dur: 17 },
+    { w: 105, h: 95, l: 40, t: 70, delay: 11, dur: 22 },
+    { w: 80, h: 85, l: 75, t: 55, delay: 9, dur: 19 },
+    { w: 115, h: 75, l: 20, t: 90, delay: 14, dur: 21 },
+    { w: 95, h: 110, l: 50, t: 5, delay: 0, dur: 16 },
+    { w: 70, h: 90, l: 80, t: 30, delay: 13, dur: 24 },
+    { w: 100, h: 80, l: 30, t: 45, delay: 16, dur: 18 },
+    { w: 85, h: 105, l: 65, t: 65, delay: 18, dur: 20 },
+    { w: 110, h: 95, l: 95, t: 50, delay: 17, dur: 22 },
+    { w: 75, h: 115, l: 8, t: 35, delay: 19, dur: 17 },
+  ];
+
   // Show loading while checking profile
   if (!childProfile) {
     return (
@@ -90,17 +114,17 @@ export default function Home() {
     <main className="min-h-screen animated-gradient relative overflow-hidden">
       {/* Animated Particles Background */}
       <div className="particles-bg">
-        {[...Array(20)].map((_, i) => (
+        {homeParticles.map((p, i) => (
           <div
             key={i}
             className="particle"
             style={{
-              width: `${Math.random() * 100 + 50}px`,
-              height: `${Math.random() * 100 + 50}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
+              width: `${p.w}px`,
+              height: `${p.h}px`,
+              left: `${p.l}%`,
+              top: `${p.t}%`,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.dur}s`,
             }}
           />
         ))}
@@ -109,8 +133,8 @@ export default function Home() {
       {/* Supabase Status Indicator with Glow */}
       <div className="fixed top-4 right-4 z-50">
         <div className={`glass-card flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold ${isSupabaseConfigured()
-            ? 'text-green-400 neon-glow-blue'
-            : 'text-yellow-400'
+          ? 'text-green-400 neon-glow-blue'
+          : 'text-yellow-400'
           }`}>
           <span className={`w-2.5 h-2.5 rounded-full ${isSupabaseConfigured() ? 'bg-green-400 animate-pulse pulse-animation' : 'bg-yellow-400'
             }`}></span>
@@ -175,8 +199,8 @@ export default function Home() {
             <div className="flex justify-between mt-3">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className={`w-3 h-3 rounded-full transition-all duration-500 ${i < completedGames.size
-                    ? 'bg-green-400 shadow-lg shadow-green-400/50 scale-110'
-                    : 'bg-slate-700 scale-75'
+                  ? 'bg-green-400 shadow-lg shadow-green-400/50 scale-110'
+                  : 'bg-slate-700 scale-75'
                   }`}></div>
               ))}
             </div>
@@ -208,8 +232,8 @@ export default function Home() {
                 key={game.id}
                 href={game.href}
                 className={`game-card glass-card-strong relative p-8 rounded-3xl group overflow-hidden ${isCompleted
-                    ? 'border-4 border-green-400 shadow-2xl shadow-green-400/30'
-                    : 'border-2 border-purple-500/20 hover:border-purple-400/60'
+                  ? 'border-4 border-green-400 shadow-2xl shadow-green-400/30'
+                  : 'border-2 border-purple-500/20 hover:border-purple-400/60'
                   }`}
               >
                 {/* Animated Background Gradient */}
