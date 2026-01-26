@@ -6,7 +6,7 @@ import { supabase, isSupabaseConfigured, DbChild, DbSession, DbReport } from './
 
 export function getDeviceId(): string {
   if (typeof window === 'undefined') return 'server';
-  
+
   let deviceId = localStorage.getItem('neurogen-device-id');
   if (!deviceId) {
     deviceId = `device-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;

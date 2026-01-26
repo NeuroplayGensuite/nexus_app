@@ -21,12 +21,12 @@ export function useSupabase() {
   // Load all profiles
   const loadProfiles = useCallback(async () => {
     if (!isConfigured) return;
-    
+
     setIsLoading(true);
     try {
       const profiles = await db.getAllChildProfiles();
       setChildProfiles(profiles);
-      
+
       // Set the most recent profile as current if none selected
       if (profiles.length > 0 && !currentProfile) {
         setCurrentProfile(profiles[0]);
@@ -41,7 +41,7 @@ export function useSupabase() {
   // Load data for current profile
   const loadProfileData = useCallback(async () => {
     if (!isConfigured || !currentProfile) return;
-    
+
     setIsLoading(true);
     try {
       const [sessionsData, reportData] = await Promise.all([
@@ -112,7 +112,7 @@ export function useSupabase() {
       setError('No profile selected or Supabase not configured');
       return null;
     }
-    
+
     try {
       const session = await db.createGameSession({
         child_id: currentProfile.id,
@@ -138,16 +138,16 @@ export function useSupabase() {
     }
   ) => {
     if (!isConfigured) return null;
-    
+
     try {
       const session = await db.completeGameSession(sessionId, results);
-      
+
       // Refresh sessions
       if (currentProfile) {
         const updated = await db.getSessionsForChild(currentProfile.id);
         setSessions(updated);
       }
-      
+
       return session;
     } catch (err) {
       setError(String(err));
@@ -162,7 +162,7 @@ export function useSupabase() {
     source: string
   ) => {
     if (!isConfigured || !currentProfile) return null;
-    
+
     try {
       const report = await db.saveReport(currentProfile.id, sessionIds, reportData, source);
       if (report) {
@@ -198,7 +198,7 @@ export function useSupabase() {
     if (!isConfigured) {
       return { success: false, error: 'Supabase not configured' };
     }
-    
+
     setIsLoading(true);
     try {
       const result = await db.syncLocalDataToCloud(localData);
@@ -222,7 +222,7 @@ export function useSupabase() {
     currentProfile,
     sessions,
     latestReport,
-    
+
     // Actions
     loadProfiles,
     loadProfileData,
@@ -233,10 +233,10 @@ export function useSupabase() {
     saveReport,
     testConnection,
     syncToCloud,
-    
+
     // Utilities
     clearError: () => setError(null),
-    
+
     // Direct client access (for advanced use)
     supabase,
   };

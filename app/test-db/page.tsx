@@ -11,9 +11,9 @@ export default function TestDBPage() {
 
   const handleTestConnection = async () => {
     setStatus('Testing connection...');
-    
+
     const result = await testConnection();
-    
+
     if (result.connected) {
       setStatus('✅ Connected successfully!');
       setTables(result.tables);
@@ -30,7 +30,7 @@ export default function TestDBPage() {
     }
 
     setStatus('Inserting test data...');
-    
+
     try {
       const { data, error } = await supabase
         .from('child_profiles')
@@ -43,15 +43,15 @@ export default function TestDBPage() {
         })
         .select()
         .single();
-      
+
       if (error) {
         setStatus(`❌ Insert Error: ${error.message}`);
         return;
       }
-      
+
       setStatus(`✅ Inserted! ID: ${data.id}`);
       setInsertedId(data.id);
-      
+
     } catch (err) {
       setStatus(`❌ Exception: ${String(err)}`);
     }
@@ -64,21 +64,21 @@ export default function TestDBPage() {
     }
 
     setStatus('Deleting test data...');
-    
+
     try {
       const { error } = await supabase
         .from('child_profiles')
         .delete()
         .eq('id', insertedId);
-      
+
       if (error) {
         setStatus(`❌ Delete Error: ${error.message}`);
         return;
       }
-      
+
       setStatus('✅ Test data deleted!');
       setInsertedId(null);
-      
+
     } catch (err) {
       setStatus(`❌ Exception: ${String(err)}`);
     }
@@ -91,21 +91,21 @@ export default function TestDBPage() {
     }
 
     setStatus('Fetching all profiles...');
-    
+
     try {
       const { data, error } = await supabase
         .from('child_profiles')
         .select('id, name, age, grade, created_at')
         .order('created_at', { ascending: false })
         .limit(10);
-      
+
       if (error) {
         setStatus(`❌ Fetch Error: ${error.message}`);
         return;
       }
-      
+
       setStatus(`✅ Found ${data?.length || 0} profiles:\n${JSON.stringify(data, null, 2)}`);
-      
+
     } catch (err) {
       setStatus(`❌ Exception: ${String(err)}`);
     }
@@ -118,7 +118,7 @@ export default function TestDBPage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">🗄️ Supabase Connection Test</h1>
         <p className="text-slate-400 mb-8">Test your database connection and operations</p>
-        
+
         {/* Environment Check */}
         <div className="bg-slate-800 p-4 rounded-lg mb-6">
           <h2 className="text-xl font-bold mb-3">📋 Environment Check</h2>
@@ -169,7 +169,7 @@ export default function TestDBPage() {
             >
               🔌 Test Connection
             </button>
-            
+
             <button
               onClick={handleFetchAll}
               disabled={!isConfigured}
@@ -177,7 +177,7 @@ export default function TestDBPage() {
             >
               📋 Fetch Profiles
             </button>
-            
+
             <button
               onClick={handleInsertTestData}
               disabled={!isConfigured}
@@ -185,7 +185,7 @@ export default function TestDBPage() {
             >
               ➕ Insert Test Data
             </button>
-            
+
             <button
               onClick={handleDeleteTestData}
               disabled={!isConfigured || !insertedId}
@@ -220,7 +220,7 @@ export default function TestDBPage() {
             <li>Copy your Project URL and anon key from Settings → API</li>
             <li>Add them to <code className="bg-slate-700 px-1 rounded">.env.local</code>:
               <pre className="bg-slate-900 p-2 rounded mt-2 text-xs">
-{`NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+                {`NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...`}
               </pre>
             </li>
