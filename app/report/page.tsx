@@ -563,6 +563,105 @@ export default function ReportPage() {
               )}
             </div>
 
+            {/* Likely Conditions / Screening Results Section */}
+            <div className="bg-gradient-to-r from-rose-900/30 to-orange-900/30 rounded-2xl p-6 border border-rose-700/50 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <span>🔍</span> Screening Results
+                </h2>
+                <p className="text-sm text-rose-100/80 bg-rose-900/50 px-3 py-1 rounded-full border border-rose-700/60">Likely Areas of Concern</p>
+              </div>
+
+              {report.findings.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Condition Cards */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {report.findings.map((finding, idx) => (
+                      <div
+                        key={idx}
+                        className={`rounded-xl p-4 border ${finding.confidence === 'high'
+                            ? 'bg-red-900/40 border-red-600/60'
+                            : 'bg-amber-900/30 border-amber-600/50'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-3 h-3 rounded-full ${CONDITION_COLORS[finding.condition] || 'bg-gray-500'}`}></span>
+                            <h3 className="text-lg font-bold text-white">
+                              {CONDITION_LABELS[finding.condition] || finding.condition}
+                            </h3>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${finding.confidence === 'high'
+                              ? 'bg-red-600 text-white'
+                              : 'bg-amber-600 text-white'
+                            }`}>
+                            {finding.confidence === 'high' ? '⚠️ High' : '📊 Medium'} Likelihood
+                          </span>
+                        </div>
+
+                        {/* Evidence */}
+                        <div className="mb-3">
+                          <p className="text-xs text-gray-400 uppercase font-bold mb-1">Evidence:</p>
+                          <ul className="text-sm text-gray-300 space-y-1">
+                            {finding.evidence?.map((e, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                <span className="text-blue-400">•</span> {e}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Daily Life Impact */}
+                        <div className="bg-slate-800/50 rounded-lg p-3">
+                          <p className="text-xs text-gray-400 uppercase font-bold mb-1">What this means:</p>
+                          <p className="text-sm text-gray-200">{finding.dailyLifeImpact}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary Banner */}
+                  <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-600">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">🎯</span>
+                      <div>
+                        <p className="text-white font-bold">
+                          {report.findings.length} potential area{report.findings.length > 1 ? 's' : ''} identified
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          {report.findings.filter(f => f.confidence === 'high').length > 0
+                            ? `${report.findings.filter(f => f.confidence === 'high').length} with high likelihood - professional evaluation recommended`
+                            : 'Early screening indicators - continued monitoring suggested'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-900/30 rounded-xl p-6 border border-green-700/50 text-center">
+                  <span className="text-4xl mb-3 block">✨</span>
+                  <h3 className="text-xl font-bold text-green-400 mb-2">No Concerns Detected</h3>
+                  <p className="text-gray-300">
+                    {childProfile?.name || 'Your child'} performed within typical ranges across all assessed areas.
+                    Keep encouraging their learning journey!
+                  </p>
+                </div>
+              )}
+
+              {/* Important Disclaimer */}
+              <div className="mt-4 bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/40">
+                <p className="text-yellow-200/90 text-xs flex items-start gap-2">
+                  <span className="text-lg">⚠️</span>
+                  <span>
+                    <strong>Important:</strong> These are screening indicators only, not clinical diagnoses.
+                    Learning differences often overlap, and many children show mixed patterns.
+                    A qualified professional (educational psychologist, developmental pediatrician)
+                    should conduct formal assessments before any diagnosis is made.
+                  </span>
+                </p>
+              </div>
+            </div>
+
             {/* Findings - parent friendly */}
             {/* Visual Charts */}
             <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
