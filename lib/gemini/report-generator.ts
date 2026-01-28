@@ -425,13 +425,15 @@ export function parseGeminiResponse(response: string): Record<string, unknown> |
     // Try to extract JSON from code block
     const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[1]);
+      const parsed = JSON.parse(jsonMatch[1]);
+      return ensureActionPlan(parsed);
     }
 
     // Try to find raw JSON object
     const rawJsonMatch = response.match(/\{[\s\S]*\}/);
     if (rawJsonMatch) {
-      return JSON.parse(rawJsonMatch[0]);
+      const parsed = JSON.parse(rawJsonMatch[0]);
+      return ensureActionPlan(parsed);
     }
 
     return null;
@@ -439,6 +441,33 @@ export function parseGeminiResponse(response: string): Record<string, unknown> |
     console.error('Failed to parse Gemini response:', error);
     return null;
   }
+}
+
+// Ensure actionPlan always exists
+function ensureActionPlan(report: Record<string, unknown>): Record<string, unknown> {
+  if (!report.actionPlan || typeof report.actionPlan !== 'object') {
+    report.actionPlan = {
+      week1: ['Schedule professional evaluation', 'Begin daily 15-minute skill-building activities', 'Document specific challenges observed', 'Maintain positive encouragement'],
+      week2: ['Start targeted interventions based on findings', 'Continue structured practice', 'Track progress weekly', 'Celebrate small wins'],
+      week3: ['Continue structured practice', 'Introduce adaptive tools if recommended', 'Maintain regular communication with specialists', 'Keep learning environment positive'],
+      week4: ['Review progress with specialists', 'Adjust strategies as needed', 'Plan long-term support', 'Celebrate improvements achieved'],
+    };
+  } else {
+    const plan = report.actionPlan as Record<string, unknown>;
+    if (!plan.week1 || !Array.isArray(plan.week1) || plan.week1.length === 0) {
+      plan.week1 = ['Schedule professional evaluation', 'Begin daily 15-minute activities', 'Document challenges', 'Stay positive'];
+    }
+    if (!plan.week2 || !Array.isArray(plan.week2) || plan.week2.length === 0) {
+      plan.week2 = ['Start interventions', 'Continue practice', 'Track progress', 'Celebrate wins'];
+    }
+    if (!plan.week3 || !Array.isArray(plan.week3) || plan.week3.length === 0) {
+      plan.week3 = ['Continue practice', 'Use adaptive tools', 'Communicate with specialists', 'Stay positive'];
+    }
+    if (!plan.week4 || !Array.isArray(plan.week4) || plan.week4.length === 0) {
+      plan.week4 = ['Review progress', 'Adjust strategies', 'Plan long-term', 'Celebrate improvements'];
+    }
+  }
+  return report;
 }
 
 /**
