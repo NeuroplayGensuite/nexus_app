@@ -1287,7 +1287,7 @@ npm run build
 
 ### Community & Support
 
-**Repository:** [github.com/allenalex1246end/nexus_app](https://github.com/allenalex1246end/nexus_app)
+
 
 **Issue Reporting:**
 - Use GitHub Issues for bugs
