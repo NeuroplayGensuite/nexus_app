@@ -1,4 +1,5 @@
 // Standalone Groq API Test
+require('dotenv').config({ path: '.env.local' });
 const https = require('https');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || 'your-api-key-here';
