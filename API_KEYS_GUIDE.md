@@ -115,19 +115,3 @@ GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-## 🎬 For Video Demo:
-
-Pre-generate a report BEFORE recording:
-1. Create test profile
-2. Play all games
-3. Generate report
-4. Take screenshots of PDF
-5. Now record your walkthrough with cached data
-
-This ensures smooth demo even if API is slow during recording!
-
----
-
-**Need help?** Check:
-- Groq Docs: https://console.groq.com/docs
-- Gemini Docs: https://ai.google.dev/gemini-api/docs

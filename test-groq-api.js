@@ -3,7 +3,7 @@ require('dotenv').config({ path: '.env.local' });
 const https = require('https');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || 'your-api-key-here';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 
 const payload = JSON.stringify({
   model: GROQ_MODEL,

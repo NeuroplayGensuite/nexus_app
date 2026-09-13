@@ -21,7 +21,7 @@ const CEREBRAS_API_URL = 'https://api.cerebras.ai/v1/chat/completions';
 const TOGETHER_API_URL = 'https://api.together.xyz/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 const CEREBRAS_MODEL = 'llama-3.3-70b';
 const TOGETHER_MODEL = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo';
 
