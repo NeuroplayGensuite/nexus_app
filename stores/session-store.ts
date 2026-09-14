@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Coordinate, GameSession, BiometricMetrics, GameEvent, ChildProfile } from '@/types';
+import type { SessionVisualEngagement } from '@/lib/attention/engagement-types';
 import {
   saveChildProfile,
   saveGameSession,
@@ -25,6 +26,8 @@ interface SessionState {
   addCoordinate: (coord: Coordinate) => void;
   addEvent: (event: Omit<GameEvent, 'timestamp'>) => void;
   updateMetrics: (metrics: Partial<BiometricMetrics>) => void;
+  /** Call this BEFORE endSession() to attach final CV metrics to the session */
+  updateVisualEngagement: (engagement: SessionVisualEngagement | null) => void;
 
   // Aggregation
   getAggregatedMetrics: () => BiometricMetrics;
@@ -138,6 +141,23 @@ export const useSessionStore = create<SessionState>()(
             currentSession: {
               ...currentSession,
               metrics: { ...currentSession.metrics, ...metrics },
+            },
+          });
+        }
+      },
+
+      updateVisualEngagement: (engagement) => {
+        const { currentSession } = get();
+        if (currentSession) {
+          set({
+            currentSession: {
+              ...currentSession,
+              visualEngagement: engagement,
+              // Also write into metrics blob for Supabase JSONB compatibility
+              metrics: {
+                ...currentSession.metrics,
+                visualEngagementMetrics: engagement,
+              },
             },
           });
         }

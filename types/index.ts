@@ -1,4 +1,6 @@
 // NeuroGen Suite - Core Types
+import type { SessionVisualEngagement } from '@/lib/attention/engagement-types';
+export type { SessionVisualEngagement } from '@/lib/attention/engagement-types';
 
 export interface Coordinate {
   x: number;
@@ -14,6 +16,8 @@ export interface GameSession {
   coordinates: Coordinate[];
   events: GameEvent[];
   metrics: BiometricMetrics;
+  /** CV-derived visual engagement metrics — null if camera was unavailable */
+  visualEngagement?: SessionVisualEngagement | null;
 }
 
 export interface GameEvent {
@@ -56,6 +60,10 @@ export interface BiometricMetrics {
   spatialDecay3s?: number;         // Accuracy after 3s delay
   spatialDecay5s?: number;         // Accuracy after 5s delay
   visualMemoryScore?: number;      // Overall visual memory score
+
+  // Visual Engagement (CV tracker — all games)
+  // NOTE: null = camera unavailable; 0 = measured zero (distinct values)
+  visualEngagementMetrics?: SessionVisualEngagement | null;
 }
 
 export interface SuspectedCondition {

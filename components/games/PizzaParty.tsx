@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { analyzeSubitizing } from '@/lib/biometrics/timing-metrics';
+import { useVisualEngagement } from '@/lib/hooks/use-visual-engagement';
 
 interface CricketForgeProps {
   onComplete: (metrics: {
@@ -76,6 +77,11 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
 
   const { startSession, endSession, addEvent, updateMetrics } = useSessionStore();
 
+  // ── Visual engagement tracking ──
+  const { beginTracking, submitTrial, finaliseTracking } = useVisualEngagement();
+  const sessionStartMsRef = useRef<number>(0);
+  const trialStartMsRef = useRef<number>(0);
+
   // Start session on mount
   useEffect(() => {
     startSession('cricket');
@@ -136,6 +142,9 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     setTimeLeft(10);
     orderStartTimeRef.current = Date.now();
 
+    // CV: start trial timer
+    trialStartMsRef.current = performance.now() - sessionStartMsRef.current;
+
     // Start countdown
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -157,6 +166,14 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
 
   // Handle timeout
   const handleTimeout = () => {
+    // CV: end trial on timeout
+    const roundEndMs = performance.now() - sessionStartMsRef.current;
+    submitTrial({
+      trialId: `pizza-round-${currentRound}`,
+      startTimestamp: trialStartMsRef.current,
+      endTimestamp: roundEndMs,
+    });
+
     setHearts(prev => prev - 1);
     setFeedback('wrong');
     setGamePhase('feedback');
@@ -186,6 +203,14 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     if (gamePhase !== 'order' || !currentOrder) return;
 
     if (timerRef.current) clearInterval(timerRef.current);
+
+    // CV: end trial on answer
+    const roundEndMs = performance.now() - sessionStartMsRef.current;
+    submitTrial({
+      trialId: `pizza-round-${currentRound}`,
+      startTimestamp: trialStartMsRef.current,
+      endTimestamp: roundEndMs,
+    });
 
     const responseTime = Date.now() - orderStartTimeRef.current;
     const correct = value === currentOrder.total;
@@ -247,6 +272,10 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     };
 
     updateMetrics(metrics);
+
+    // CV: finalize before ending session
+    finaliseTracking();
+
     endSession();
 
     onComplete(metrics);
@@ -260,7 +289,12 @@ export default function CricketForge({ onComplete }: CricketForgeProps) {
     setHearts(3);
     setResults([]);
     setFeedback(null);
-    startSession('cricket');
+
+    // CV: anchor session clock
+    const nowMs = performance.now();
+    sessionStartMsRef.current = nowMs;
+    startSession('cricket'); // Game uses 'cricket' identifier for history
+    beginTracking(nowMs);
 
     setTimeout(() => {
       generateOrder();

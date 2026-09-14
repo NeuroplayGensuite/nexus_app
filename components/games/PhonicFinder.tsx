@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { calculatePhonicRetrievalSpeed } from '@/lib/biometrics/timing-metrics';
 import { usePhonicLevel } from '@/lib/hooks/use-level-generator';
+import { useVisualEngagement } from '@/lib/hooks/use-visual-engagement';
 
 interface PhonicFinderProps {
   onComplete: (metrics: {
@@ -152,6 +153,11 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
 
   // ── UNCHANGED: Zustand session hooks ──
   const { startSession, endSession, addEvent, updateMetrics } = useSessionStore();
+
+  // ── Visual engagement tracking ──
+  const { beginTracking, submitTrial, finaliseTracking } = useVisualEngagement();
+  const sessionStartMsRef = useRef<number>(0);
+  const roundStartMsRef = useRef<number>(0);
 
   // ── UNCHANGED: Generative Level Engine hook ──
   const { level: generatedLevel, isLoading: levelLoading, isGenerated } = usePhonicLevel();
@@ -306,7 +312,15 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
     setIsPlaying(true);
     setCurrentRound(0);
     setResults([]);
+
+    // CV: anchor session clock, then start game
+    const nowMs = performance.now();
+    sessionStartMsRef.current = nowMs;
     startSession('phonic');
+    beginTracking(nowMs);
+
+    // First round starts immediately
+    roundStartMsRef.current = 0; // session-relative ms
 
     setTimeout(() => {
       // Always speak from the RESOLVED data (post-validation), not raw AI data
@@ -315,7 +329,7 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
         speakPhoneme(resolved.phoneme, resolved.word);
       }
     }, 500);
-  }, [startSession, speakPhoneme, generatedLevel]);
+  }, [startSession, beginTracking, speakPhoneme, generatedLevel]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // UNCHANGED: item click — all metric calculations identical to original
@@ -360,8 +374,18 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
       setFeedback(null);
       setShowingPhoneme(false);
 
+      // CV: close the trial that just ended
+      const roundEndMs = performance.now() - sessionStartMsRef.current;
+      submitTrial({
+        trialId: `phonic-round-${currentRound}`,
+        startTimestamp: roundStartMsRef.current,
+        endTimestamp: roundEndMs,
+      });
+
       if (currentRound < generatedLevel.targetWords.length - 1) {
         const nextRound = currentRound + 1;
+        // CV: start timing the next round
+        roundStartMsRef.current = performance.now() - sessionStartMsRef.current;
         setCurrentRound(nextRound);
 
         setTimeout(() => {
@@ -375,7 +399,7 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
         handleComplete();
       }
     }, 1000);
-  }, [showingPhoneme, feedback, currentRound, addEvent, speakPhoneme, generatedLevel]);
+  }, [showingPhoneme, feedback, currentRound, addEvent, submitTrial, speakPhoneme, generatedLevel]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // UNCHANGED: complete the game — identical metric assembly
@@ -405,10 +429,13 @@ export default function PhonicFinder({ onComplete }: PhonicFinderProps) {
       totalPhonicAttempts: metrics.totalAttempts,
     });
 
+    // CV: finalise engagement data before endSession
+    finaliseTracking();
+
     // ── UNCHANGED: endSession + onComplete ──
     endSession();
     onComplete(metrics);
-  }, [results, updateMetrics, endSession, onComplete]);
+  }, [results, updateMetrics, finaliseTracking, endSession, onComplete]);
 
   // ── UNCHANGED: cleanup ──
   useEffect(() => {

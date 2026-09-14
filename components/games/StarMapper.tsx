@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
+import { useVisualEngagement } from '@/lib/hooks/use-visual-engagement';
 
 interface StarMapperProps {
   onComplete: (metrics: any) => void;
@@ -15,6 +16,11 @@ interface Star {
 
 export default function StarMapper({ onComplete }: StarMapperProps) {
   const { addEvent, startSession, endSession, updateMetrics } = useSessionStore();
+
+  // ── Visual engagement tracking ──
+  const { beginTracking, submitTrial, finaliseTracking } = useVisualEngagement();
+  const sessionStartMsRef = useRef<number>(0);
+  const trialStartMsRef = useRef<number>(0);
 
   // Game state
   const [gamePhase, setGamePhase] = useState<'intro' | 'memorize' | 'recall' | 'feedback' | 'complete'>('intro');
@@ -65,7 +71,10 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
   const startGame = () => {
     // Start session on first round
     if (currentRound === 1) {
+      const nowMs = performance.now();
+      sessionStartMsRef.current = nowMs;
       startSession('star');
+      beginTracking(nowMs);
     }
 
     setGamePhase('memorize');
@@ -92,6 +101,10 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
 
     setTimeout(() => {
       setGamePhase('recall');
+      
+      // CV: start trial timer for the recall phase
+      trialStartMsRef.current = performance.now() - sessionStartMsRef.current;
+      
       addEvent({
         type: 'recall-start',
         data: { round: currentRound }
@@ -178,6 +191,14 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
       type: 'round-complete',
       data: { round: currentRound, accuracy, correctClicks, totalStars: starPattern.length }
     });
+    
+    // CV: end trial
+    const roundEndMs = performance.now() - sessionStartMsRef.current;
+    submitTrial({
+      trialId: `star-round-${currentRound}`,
+      startTimestamp: trialStartMsRef.current,
+      endTimestamp: roundEndMs,
+    });
 
     // Next round or complete
     setTimeout(() => {
@@ -208,6 +229,10 @@ export default function StarMapper({ onComplete }: StarMapperProps) {
     };
 
     updateMetrics(metrics);
+    
+    // CV: finalize before ending session
+    finaliseTracking();
+    
     endSession();
 
     onComplete({

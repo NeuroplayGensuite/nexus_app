@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
+import { useVisualEngagement } from '@/lib/hooks/use-visual-engagement';
 
 interface SyncMasterProps {
   onComplete: (metrics: any) => void;
@@ -24,10 +25,24 @@ const BUTTONS: ColorButton[] = [
 export default function SyncMaster({ onComplete }: SyncMasterProps) {
   const { addEvent, startSession, endSession, updateMetrics } = useSessionStore();
 
+  // ── Visual engagement tracking ──
+  const { beginTracking, submitTrial, finaliseTracking } = useVisualEngagement();
+  const sessionStartMsRef = useRef<number>(0);
+  const trialStartMsRef = useRef<number>(0);
+  
+  // Need a ref for initial session start so it doesn't get called multiple times
+  const sessionStartedRef = useRef(false);
+
   // Start session on mount
   useEffect(() => {
-    startSession('sync');
-  }, [startSession]);
+    if (!sessionStartedRef.current) {
+      sessionStartedRef.current = true;
+      const nowMs = performance.now();
+      sessionStartMsRef.current = nowMs;
+      startSession('sync');
+      beginTracking(nowMs);
+    }
+  }, [startSession, beginTracking]);
 
   // Game state
   const [gamePhase, setGamePhase] = useState<'intro' | 'watch' | 'play' | 'feedback' | 'complete'>('intro');
@@ -62,6 +77,9 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     setPlayerSequence([]);
     setGamePhase('watch');
     setStartTime(Date.now());
+    
+    // CV: start trial timer
+    trialStartMsRef.current = performance.now() - sessionStartMsRef.current;
 
     addEvent({
       type: 'game-start',
@@ -161,6 +179,14 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
 
     setReactionTimes([]);
 
+    // CV: end trial
+    const roundEndMs = performance.now() - sessionStartMsRef.current;
+    submitTrial({
+      trialId: `sync-round-${currentRound}`,
+      startTimestamp: trialStartMsRef.current,
+      endTimestamp: roundEndMs,
+    });
+
     // Next round or complete
     setTimeout(() => {
       if (currentRound < totalRounds) {
@@ -191,6 +217,10 @@ export default function SyncMaster({ onComplete }: SyncMasterProps) {
     };
 
     updateMetrics(metrics);
+    
+    // CV: finalize before ending session
+    finaliseTracking();
+
     endSession();
 
     onComplete({

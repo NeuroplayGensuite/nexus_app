@@ -15,6 +15,7 @@ import {
   calculateTremor
 } from '@/lib/biometrics/jerk-analysis';
 import { useMazeLevel } from '@/lib/hooks/use-level-generator';
+import { useVisualEngagement } from '@/lib/hooks/use-visual-engagement';
 import { Coordinate, WallBoundary, BiometricMetrics } from '@/types';
 
 interface MazeGameProps {
@@ -101,6 +102,10 @@ export default function MazeGame({ onComplete, width = 800, height = 500 }: Maze
   const pathRef = useRef<Coordinate[]>([]);
 
   const { startSession, endSession, addCoordinate, updateMetrics } = useSessionStore();
+  
+  // ── Visual engagement tracking ──
+  const { beginTracking, submitTrial, finaliseTracking } = useVisualEngagement();
+  const sessionStartMsRef = useRef<number>(0);
 
   // 🌟 Generative Level Engine - Get themed content based on child's interests
   const { level: generatedLevel, isLoading: levelLoading, isGenerated } = useMazeLevel();
@@ -322,8 +327,13 @@ export default function MazeGame({ onComplete, width = 800, height = 500 }: Maze
     pathRef.current = [IDEAL_PATH[0]];
     setCharacterPos(IDEAL_PATH[0]);
     addCoordinate(IDEAL_PATH[0]);
+    
+    // CV: anchor session clock, then start game
+    const nowMs = performance.now();
+    sessionStartMsRef.current = nowMs;
     startSession('maze');
-  }, [isComplete, addCoordinate, startSession]);
+    beginTracking(nowMs);
+  }, [isComplete, addCoordinate, startSession, beginTracking]);
 
   // Handle game start button click
   const handleGameStart = useCallback(() => {
@@ -377,10 +387,20 @@ export default function MazeGame({ onComplete, width = 800, height = 500 }: Maze
       };
 
       updateMetrics(metrics);
+      
+      // CV: submit trial and finalize
+      const roundEndMs = performance.now() - sessionStartMsRef.current;
+      submitTrial({
+        trialId: 'maze-game', // Maze is one continuous activity
+        startTimestamp: 0,
+        endTimestamp: roundEndMs,
+      });
+      finaliseTracking();
+
       endSession();
       onComplete(metrics);
     }
-  }, [characterPos, hasStarted, isDrawing, updateMetrics, endSession, onComplete]);
+  }, [characterPos, hasStarted, isDrawing, updateMetrics, submitTrial, finaliseTracking, endSession, onComplete]);
 
   // Check for completion on every move
   useEffect(() => {
