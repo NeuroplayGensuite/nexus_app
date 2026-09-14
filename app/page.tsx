@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
@@ -67,12 +67,18 @@ export default function Home() {
   const { childProfile, allSessions } = useSessionStore();
   const router = useRouter();
 
-  // Redirect to profile page if no profile exists
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!childProfile) {
+    setMounted(true);
+  }, []);
+
+  // Redirect to profile page if no profile exists, but ONLY after hydration
+  useEffect(() => {
+    if (mounted && !childProfile) {
       router.push('/profile');
     }
-  }, [childProfile, router]);
+  }, [mounted, childProfile, router]);
 
   const completedGames = new Set(allSessions.map(s => s.gameType));
   const allGamesComplete = completedGames.size === 6;
