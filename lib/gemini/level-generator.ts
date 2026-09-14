@@ -105,39 +105,108 @@ Return ONLY valid JSON (no markdown) in this format:
 Make it exciting, age-appropriate for ${profile.age} years old, and incorporate their interests naturally.`;
 }
 
-export function generatePhonicLevelPrompt(profile: ChildProfile): string {
+export function generatePhonicLevelPrompt(profile: ChildProfile, allowedWords: string[]): string {
   const themes = getThemeKeywords(profile.interests);
   const lang = profile.preferredLanguage === 'ml' ? 'Malayalam' : 'English';
-  
-  return `You are creating a phonics game for ${profile.name}, age ${profile.age}.
+
+  // Build a compact word list string to inject into the prompt
+  const vocabList = allowedWords.join(', ');
+
+  return `You are designing a phoneme discrimination game for a child named ${profile.name}, age ${profile.age}.
 Their interests: ${profile.interests.join(', ')}.
 Language: ${lang}
 
-Generate phonics content themed around: ${themes.slice(0, 2).join(', ')}.
+OBJECTIVE: The child listens to a target sound and must choose the correct picture from 4 options.
+Difficulty comes from PHONEME SIMILARITY, not vocabulary difficulty.
 
-Return ONLY valid JSON:
+═══════════════════════════════════════════════
+STRICT VOCABULARY RULE — MOST IMPORTANT RULE
+═══════════════════════════════════════════════
+You MUST ONLY use words from the following approved list.
+Do NOT use any word that is not in this list. Any word outside this list will be rejected.
+
+APPROVED WORDS:
+${vocabList}
+
+═══════════════════════════════════════════════
+PERSONALIZATION RULES
+═══════════════════════════════════════════════
+The child loves: ${profile.interests.join(', ')}.
+Pick your words from the approved list above that best relate to their interests where possible.
+Image descriptions should be themed around: ${themes.slice(0, 2).join(', ')}.
+This makes the game feel personalised to the child.
+
+═══════════════════════════════════════════════
+PHONEME DIFFICULTY RULES
+═══════════════════════════════════════════════
+Each distractor must be PHONEMICALLY SIMILAR to the target word.
+Use these confusion strategies:
+- /b/ vs /p/ (e.g. bear vs pear)
+- /f/ vs /v/ (e.g. fox vs van)
+- /s/ vs /sh/ (e.g. sun vs ship)
+- /ch/ vs /sh/ (e.g. cherry vs sheep)
+- /t/ vs /d/ (e.g. tiger vs deer)
+- /k/ vs /g/ (e.g. key vs gem)
+- /m/ vs /n/ (e.g. moon vs nest)
+- /r/ vs /l/ (e.g. rabbit vs lemon)
+- All options share same starting sound (hardest)
+
+═══════════════════════════════════════════════
+PROGRESSIVE DIFFICULTY (STRICTLY FOLLOW THIS ORDER)
+═══════════════════════════════════════════════
+Round 1 (Easiest): Target phoneme with 1 phonemically similar distractor + 2 clearly different ones.
+Round 2 (Easy-Medium): Target phoneme with 2 phonemically similar distractors + 1 different.
+Round 3 (Medium): All 4 options share the same starting letter/sound family. Child must find the exact target.
+Round 4 (Hard): Classic minimal-pair confusion (e.g. /ch/ vs /sh/, or /b/ vs /p/).
+Round 5 (Hardest): All 4 options start with very similar sounds. Near-identical initial phonemes.
+
+═══════════════════════════════════════════════
+VALIDATION RULES — CHECK BEFORE OUTPUTTING
+═══════════════════════════════════════════════
+1. Every word (target + all distractors) MUST be from the APPROVED WORDS list above.
+2. Target word MUST start with the declared phoneme.
+3. No duplicate words anywhere across all 5 rounds.
+4. Each round must have exactly 3 distractors.
+5. The question must have exactly ONE correct answer.
+
+Return ONLY valid JSON with no markdown or code fences:
 {
-  "theme": "Theme name",
+  "theme": "Cricket Sound Quest",
   "targetWords": [
     {
       "word": "ball",
       "phoneme": "b",
-      "imageDescription": "A cricket ball flying through the air",
-      "distractors": ["car", "tree", "house"]
+      "imageDescription": "A red cricket ball on the pitch",
+      "distractors": ["bat", "sun", "flower"]
     },
     {
-      "word": "catch",
-      "phoneme": "c",
-      "imageDescription": "A player catching the ball",
-      "distractors": ["run", "jump", "sit"]
+      "word": "fish",
+      "phoneme": "f",
+      "imageDescription": "A fish jumping out of water",
+      "distractors": ["fox", "frog", "fan"]
+    },
+    {
+      "word": "ship",
+      "phoneme": "sh",
+      "imageDescription": "A large ship on the ocean",
+      "distractors": ["sheep", "shoe", "sun"]
+    },
+    {
+      "word": "cherry",
+      "phoneme": "ch",
+      "imageDescription": "Ripe red cherries on a branch",
+      "distractors": ["sheep", "shoe", "shell"]
+    },
+    {
+      "word": "tiger",
+      "phoneme": "t",
+      "imageDescription": "A roaring tiger in the jungle",
+      "distractors": ["deer", "tent", "tail"]
     }
   ],
-  "instructions": "Listen to the sound and find the picture!",
+  "instructions": "Listen to the sound and find the matching picture!",
   "encouragement": ["Super ears!", "You heard it right!", "Excellent listening!"]
-}
-
-Create 5 target words. Use simple words appropriate for age ${profile.age}. 
-Incorporate ${profile.interests.join(' and ')} themes in image descriptions.`;
+}`;
 }
 
 export function generateMathLevelPrompt(profile: ChildProfile, difficulty: 'easy' | 'medium' | 'hard'): string {

@@ -19,6 +19,7 @@ import {
   GeneratedMemoryLevel,
   FALLBACK_CONTENT,
 } from '@/lib/gemini/level-generator';
+import { ALLOWED_WORDS } from '@/lib/phonic-vocabulary';
 
 type GameType = 'maze' | 'phonic' | 'math' | 'rhythm' | 'memory';
 type Difficulty = 'easy' | 'medium' | 'hard';
@@ -61,7 +62,8 @@ export function useLevelGenerator<T>(
           prompt = generateMazeLevelPrompt(childProfile);
           break;
         case 'phonic':
-          prompt = generatePhonicLevelPrompt(childProfile);
+          // Pass the full approved vocabulary so the LLM can only pick from it
+          prompt = generatePhonicLevelPrompt(childProfile, ALLOWED_WORDS);
           break;
         case 'math':
           prompt = generateMathLevelPrompt(childProfile, difficulty);
