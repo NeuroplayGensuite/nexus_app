@@ -97,6 +97,13 @@ export default function ReportPage() {
   // Only compute these on client after mount to prevent hydration mismatch
   const metrics = mounted ? getAggregatedMetrics() : {};
   const completedGames = mounted ? new Set(allSessions.map(s => s.gameType)) : new Set<string>();
+  // Most recent CV engagement data (across all sessions, prefer latest with camera data)
+  const latestEngagement = mounted
+    ? allSessions.reduceRight<import('@/lib/attention/engagement-types').SessionVisualEngagement | null>(
+        (acc, s) => acc ?? (s.visualEngagement?.cameraAvailable ? s.visualEngagement : null),
+        null
+      )
+    : null;
 
   // Handle mounting and date formatting on client only
   useEffect(() => {
@@ -170,6 +177,8 @@ export default function ReportPage() {
           metrics,
           childAge: childProfile?.age || 8,
           language: childProfile?.preferredLanguage || 'en',
+          // Pass CV engagement so feature mapper can extract camera data for pkl models
+          engagement: latestEngagement,
         }),
       });
 

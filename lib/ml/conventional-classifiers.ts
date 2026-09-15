@@ -1,13 +1,17 @@
 /**
- * Conventional Machine Learning Classifiers
- * Pre-trained models for real-time risk assessment
- * Runs entirely offline in browser/Node.js
- * 
- * ACCURACY IMPROVEMENTS (v2.0):
- * - Tuned thresholds based on synthetic dataset analysis
- * - Age-stratified decision boundaries
- * - Ensemble voting with weighted confidence
- * - Cross-validation optimized weights
+ * @deprecated — SUPERSEDED by lib/ml/feature-mapper.ts + lib/ml/hybrid-diagnostic-engine.ts
+ *
+ * This file previously contained hard-coded, rule-based implementations that
+ * simulated Random Forest / SVM / Decision Tree / MLP / KNN classifiers in
+ * TypeScript. These were NOT real trained models.
+ *
+ * As of the v2 ML integration, all predictions are made by the real
+ * scikit-learn Logistic Regression .pkl models loaded in the Python FastAPI
+ * service (ml/api/main.py). The TypeScript classifiers in this file are NO
+ * LONGER CALLED and are retained only for reference.
+ *
+ * DO NOT import this file in new code.
+ * DO NOT use these classifiers to generate ML predictions.
  */
 
 // Type definitions

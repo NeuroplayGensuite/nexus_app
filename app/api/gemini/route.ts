@@ -352,8 +352,9 @@ async function handleReportGeneration(body: {
   metrics: BiometricMetrics;
   childAge: number;
   language?: 'en' | 'ml' | 'hi';
+  engagement?: Record<string, unknown> | null;
 }) {
-  const { metrics, childAge, language = 'en' } = body;
+  const { metrics, childAge, language = 'en', engagement } = body;
 
   // Validate input
   if (!metrics || typeof childAge !== 'number') {
@@ -380,8 +381,13 @@ async function handleReportGeneration(body: {
 
   // Try AI APIs with short timeout
   try {
-    // Generate prompt with Hybrid AI (ML + Dataset analysis)
-    const prompt = await generateGeminiPrompt(metrics, childAge, language);
+    // Generate prompt with Hybrid AI (real .pkl models via FastAPI + clinical context)
+    const prompt = await generateGeminiPrompt(
+      metrics,
+      childAge,
+      language,
+      (engagement as any) ?? null
+    );
 
     // Use unified AI with fallback chain (with 10s timeout)
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
