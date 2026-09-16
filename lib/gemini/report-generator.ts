@@ -168,13 +168,16 @@ export async function generateGeminiPrompt(
   metrics: BiometricMetrics,
   childAge: number,
   language: 'en' | 'ml' | 'hi' = 'en',
-  engagement?: SessionVisualEngagement | null
+  engagement?: SessionVisualEngagement | null,
+  precomputedDiagnosis?: HybridDiagnosticReport | null
 ): Promise<string> {
   const metricsJson = JSON.stringify(metrics, null, 2);
   const ageGroup = getAgeGroup(childAge);
 
-  // Run the real .pkl models
-  const hybridDiagnosis = await hybridEngine.diagnose(metrics, childAge, engagement);
+  // Use pre-computed diagnosis if provided (avoids running the engine twice)
+  // Falls back to running the engine directly if not provided
+  const hybridDiagnosis = precomputedDiagnosis
+    ?? await hybridEngine.diagnose(metrics, childAge, engagement);
 
   console.log('[ReportGenerator] Hybrid diagnosis:', {
     mlAvailable: hybridDiagnosis.mlServiceAvailable,

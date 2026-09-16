@@ -1,33 +1,40 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import * as db from '@/lib/supabase/database';
-import { supabase, isSupabaseConfigured, DbChild, DbSession, DbReport } from '@/lib/supabase/client';
+import { testConnection } from '@/lib/supabase/database';
+import {
+  supabase,
+  isSupabaseConfigured,
+  DbChild,
+  DbSession,
+  DbReport,
+  saveChildProfile,
+  getAllChildren,
+  getSessionsByChild,
+  getLatestReport,
+  saveReport,
+} from '@/lib/supabase/client';
+import { ChildProfile } from '@/types';
 
 export function useSupabase() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState(false);
-  const [childProfiles, setChildProfiles] = useState<DbChild[]>([]);
-  const [currentProfile, setCurrentProfile] = useState<DbChild | null>(null);
+  const [childProfiles, setChildProfiles] = useState<ChildProfile[]>([]);
+  const [currentProfile, setCurrentProfile] = useState<ChildProfile | null>(null);
   const [sessions, setSessions] = useState<DbSession[]>([]);
-  const [latestReport, setLatestReport] = useState<DbReport | null>(null);
+  const [latestReport, setLatestReportState] = useState<DbReport | null>(null);
 
-  // Check if Supabase is configured on mount
   useEffect(() => {
     setIsConfigured(isSupabaseConfigured());
   }, []);
 
-  // Load all profiles
   const loadProfiles = useCallback(async () => {
     if (!isConfigured) return;
-
     setIsLoading(true);
     try {
-      const profiles = await db.getAllChildProfiles();
+      const profiles = await getAllChildren();
       setChildProfiles(profiles);
-
-      // Set the most recent profile as current if none selected
       if (profiles.length > 0 && !currentProfile) {
         setCurrentProfile(profiles[0]);
       }
@@ -38,18 +45,17 @@ export function useSupabase() {
     }
   }, [isConfigured, currentProfile]);
 
-  // Load data for current profile
   const loadProfileData = useCallback(async () => {
     if (!isConfigured || !currentProfile) return;
-
     setIsLoading(true);
     try {
       const [sessionsData, reportData] = await Promise.all([
-        db.getSessionsForChild(currentProfile.id),
-        db.getLatestReport(currentProfile.id),
+        getSessionsByChild(currentProfile.id),
+        getLatestReport(currentProfile.id),
       ]);
-      setSessions(sessionsData);
-      setLatestReport(reportData);
+      // Map GameSession[] → DbSession[] shape for display (lightweight cast)
+      setSessions(sessionsData as unknown as DbSession[]);
+      setLatestReportState(reportData);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -57,38 +63,36 @@ export function useSupabase() {
     }
   }, [isConfigured, currentProfile]);
 
-  // Load on mount and when profile changes
   useEffect(() => {
-    if (isConfigured) {
-      loadProfiles();
-    }
+    if (isConfigured) loadProfiles();
   }, [isConfigured, loadProfiles]);
 
   useEffect(() => {
-    if (currentProfile) {
-      loadProfileData();
-    }
+    if (currentProfile) loadProfileData();
   }, [currentProfile, loadProfileData]);
 
-  // Create new profile
   const createProfile = useCallback(async (data: {
     name: string;
     age: number;
     grade?: string;
     interests?: string[];
   }) => {
-    if (!isConfigured) {
-      setError('Supabase not configured');
-      return null;
-    }
-
+    if (!isConfigured) { setError('Supabase not configured'); return null; }
     setIsLoading(true);
     setError(null);
     try {
-      const profile = await db.createChildProfile(data);
-      if (profile) {
-        setChildProfiles(prev => [profile, ...prev]);
-        setCurrentProfile(profile);
+      const profile: ChildProfile = {
+        id: crypto.randomUUID(),
+        name: data.name,
+        age: data.age,
+        grade: data.grade || '',
+        interests: data.interests || [],
+        preferredLanguage: 'en',
+        createdAt: Date.now(),
+      };
+      const saved = await saveChildProfile(profile);
+      if (saved) {
+        await loadProfiles();
         return profile;
       }
       setError('Failed to create profile');
@@ -99,75 +103,33 @@ export function useSupabase() {
     } finally {
       setIsLoading(false);
     }
-  }, [isConfigured]);
+  }, [isConfigured, loadProfiles]);
 
-  // Select a profile
-  const selectProfile = useCallback((profile: DbChild) => {
+  const selectProfile = useCallback((profile: ChildProfile) => {
     setCurrentProfile(profile);
   }, []);
 
-  // Start a game session
-  const startGameSession = useCallback(async (gameType: DbSession['game_type']) => {
-    if (!isConfigured || !currentProfile) {
-      setError('No profile selected or Supabase not configured');
-      return null;
-    }
+  // startGameSession / endGameSession are now handled by the Zustand session store.
+  // Kept here as stubs so any existing callers don't break.
+  const startGameSession = useCallback(async (_gameType: DbSession['game_type']) => {
+    console.warn('[useSupabase] startGameSession: use Zustand session store instead');
+    return null;
+  }, []);
 
-    try {
-      const session = await db.createGameSession({
-        child_id: currentProfile.id,
-        game_type: gameType,
-      });
-      if (session) {
-        setSessions(prev => [session, ...prev]);
-      }
-      return session;
-    } catch (err) {
-      setError(String(err));
-      return null;
-    }
-  }, [isConfigured, currentProfile]);
+  const endGameSession = useCallback(async (_sessionId: string, _results: unknown) => {
+    console.warn('[useSupabase] endGameSession: use Zustand session store instead');
+    return null;
+  }, []);
 
-  // End a game session
-  const endGameSession = useCallback(async (
-    sessionId: string,
-    results: {
-      coordinates?: Array<{ x: number; y: number; timestamp: number }>;
-      events?: Array<{ type: string; timestamp: number; data: Record<string, unknown> }>;
-      metrics?: Record<string, unknown>;
-    }
-  ) => {
-    if (!isConfigured) return null;
-
-    try {
-      const session = await db.completeGameSession(sessionId, results);
-
-      // Refresh sessions
-      if (currentProfile) {
-        const updated = await db.getSessionsForChild(currentProfile.id);
-        setSessions(updated);
-      }
-
-      return session;
-    } catch (err) {
-      setError(String(err));
-      return null;
-    }
-  }, [isConfigured, currentProfile]);
-
-  // Save a report
-  const saveReport = useCallback(async (
+  const saveReportHook = useCallback(async (
     sessionIds: string[],
     reportData: Record<string, unknown>,
     source: string
   ) => {
     if (!isConfigured || !currentProfile) return null;
-
     try {
-      const report = await db.saveReport(currentProfile.id, sessionIds, reportData, source);
-      if (report) {
-        setLatestReport(report);
-      }
+      const report = await saveReport(currentProfile.id, sessionIds, reportData, source);
+      if (report) setLatestReportState(report);
       return report;
     } catch (err) {
       setError(String(err));
@@ -175,15 +137,12 @@ export function useSupabase() {
     }
   }, [isConfigured, currentProfile]);
 
-  // Test connection
-  const testConnection = useCallback(async () => {
+  const testConn = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await db.testConnection();
-      if (!result.connected) {
-        setError(result.error || 'Connection failed');
-      }
+      const result = await testConnection();
+      if (!result.connected) setError(result.error || 'Connection failed');
       return result;
     } catch (err) {
       setError(String(err));
@@ -193,28 +152,13 @@ export function useSupabase() {
     }
   }, []);
 
-  // Sync local data to cloud
-  const syncToCloud = useCallback(async (localData: Parameters<typeof db.syncLocalDataToCloud>[0]) => {
-    if (!isConfigured) {
-      return { success: false, error: 'Supabase not configured' };
-    }
-
-    setIsLoading(true);
-    try {
-      const result = await db.syncLocalDataToCloud(localData);
-      if (result.success) {
-        await loadProfiles(); // Refresh profiles after sync
-      }
-      return result;
-    } catch (err) {
-      return { success: false, error: String(err) };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isConfigured, loadProfiles]);
+  // syncToCloud replaced by Zustand store's syncToSupabase()
+  const syncToCloud = useCallback(async (_localData: unknown) => {
+    console.warn('[useSupabase] syncToCloud: use useSessionStore().syncToSupabase() instead');
+    return { success: false, error: 'Use useSessionStore().syncToSupabase()' };
+  }, []);
 
   return {
-    // State
     isLoading,
     error,
     isConfigured,
@@ -222,22 +166,16 @@ export function useSupabase() {
     currentProfile,
     sessions,
     latestReport,
-
-    // Actions
     loadProfiles,
     loadProfileData,
     createProfile,
     selectProfile,
     startGameSession,
     endGameSession,
-    saveReport,
-    testConnection,
+    saveReport: saveReportHook,
+    testConnection: testConn,
     syncToCloud,
-
-    // Utilities
     clearError: () => setError(null),
-
-    // Direct client access (for advanced use)
     supabase,
   };
 }

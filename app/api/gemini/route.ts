@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateGeminiPrompt, parseGeminiResponse, generateFallbackReport } from '@/lib/gemini/report-generator';
+import { hybridEngine } from '@/lib/ml/hybrid-diagnostic-engine';
+import { saveMLPredictions, saveReport, isSupabaseConfigured } from '@/lib/supabase/client';
 import { BiometricMetrics } from '@/types';
+import type { SessionVisualEngagement } from '@/lib/attention/engagement-types';
 
 // API Keys - Multiple providers for reliability
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -352,9 +355,13 @@ async function handleReportGeneration(body: {
   metrics: BiometricMetrics;
   childAge: number;
   language?: 'en' | 'ml' | 'hi';
-  engagement?: Record<string, unknown> | null;
+  engagement?: SessionVisualEngagement | null;
+  // Optional: Supabase persistence context
+  childId?: string | null;
+  assessmentId?: string | null;
+  sessionIds?: string[];
 }) {
-  const { metrics, childAge, language = 'en', engagement } = body;
+  const { metrics, childAge, language = 'en', engagement, childId, assessmentId, sessionIds } = body;
 
   // Validate input
   if (!metrics || typeof childAge !== 'number') {
@@ -371,49 +378,90 @@ async function handleReportGeneration(body: {
   const hasApiKeys = CEREBRAS_API_KEY || GROQ_API_KEY || TOGETHER_API_KEY || GEMINI_API_KEY;
 
   if (!hasApiKeys) {
-    console.log('📋 No AI API keys configured - using local ML report');
+    console.log('[Gemini] No AI API keys — using local ML report');
     return NextResponse.json({
       report: fallbackReport,
       source: 'local-ml',
-      message: 'Report generated using local ML analysis'
+      message: 'Report generated using local ML analysis',
     });
+  }
+
+  // Run the hybrid engine to get .pkl predictions AND build the LLM prompt
+  let hybridDiagnosis;
+  try {
+    hybridDiagnosis = await hybridEngine.diagnose(metrics, childAge, engagement);
+  } catch (err) {
+    console.warn('[Gemini] hybridEngine.diagnose failed:', err);
+    hybridDiagnosis = null;
+  }
+
+  // Persist ML predictions to Supabase (non-blocking, fails gracefully)
+  if (hybridDiagnosis?.mlPredictions?.length && childId && isSupabaseConfigured()) {
+    saveMLPredictions(hybridDiagnosis.mlPredictions, childId, assessmentId)
+      .catch((err) => console.warn('[Gemini] saveMLPredictions failed (non-fatal):', err));
   }
 
   // Try AI APIs with short timeout
   try {
-    // Generate prompt with Hybrid AI (real .pkl models via FastAPI + clinical context)
+    // Generate prompt — pass the pre-computed diagnosis so the engine doesn't run again
     const prompt = await generateGeminiPrompt(
       metrics,
       childAge,
       language,
-      (engagement as any) ?? null
+      engagement ?? null,
+      hybridDiagnosis ?? null
     );
 
-    // Use unified AI with fallback chain (with 10s timeout)
+    // Use unified AI with fallback chain (10s timeout)
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
     const result = await Promise.race([callAI(prompt, 0.7), timeoutPromise]);
 
     if (result) {
-      // Parse the response
       const parsedReport = parseGeminiResponse(result.content);
 
       if (parsedReport) {
-        console.log('✅ AI report generated successfully via', result.source);
+        console.log('[Gemini] AI report generated via', result.source);
+
+        // Persist report to Supabase (non-blocking)
+        if (childId && isSupabaseConfigured()) {
+          saveReport(
+            childId,
+            sessionIds || [],
+            parsedReport,
+            result.source,
+            assessmentId
+          ).catch((err) => console.warn('[Gemini] saveReport failed (non-fatal):', err));
+        }
+
         return NextResponse.json({
           report: parsedReport,
           source: result.source,
+          // Return predictions so the client has them (e.g. for display)
+          mlPredictions: hybridDiagnosis?.mlPredictions ?? [],
         });
       }
     }
   } catch (error) {
-    console.warn('AI API error:', error);
+    console.warn('[Gemini] AI API error:', error);
   }
 
-  // Return fallback if AI fails
-  console.log('📋 AI unavailable - using local ML report');
+  // Fallback path
+  console.log('[Gemini] AI unavailable — using local ML fallback report');
+
+  if (childId && isSupabaseConfigured()) {
+    saveReport(
+      childId,
+      sessionIds || [],
+      fallbackReport,
+      'local-ml',
+      assessmentId
+    ).catch((err) => console.warn('[Gemini] saveReport (fallback) failed:', err));
+  }
+
   return NextResponse.json({
     report: fallbackReport,
     source: 'local-ml',
-    message: 'Report generated using local ML analysis'
+    message: 'Report generated using local ML analysis',
+    mlPredictions: hybridDiagnosis?.mlPredictions ?? [],
   });
 }

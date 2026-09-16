@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSessionStore } from '@/stores/session-store';
-import { saveReport, isSupabaseConfigured } from '@/lib/supabase/client';
 import { BiometricMetrics, DiagnosticReport } from '@/types';
 import {
   Chart as ChartJS,
@@ -80,7 +79,7 @@ const CONDITION_LABELS: Record<string, string> = {
 };
 
 export default function ReportPage() {
-  const { childProfile, getAggregatedMetrics, allSessions } = useSessionStore();
+  const { childProfile, getAggregatedMetrics, allSessions, assessmentId } = useSessionStore();
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +178,10 @@ export default function ReportPage() {
           language: childProfile?.preferredLanguage || 'en',
           // Pass CV engagement so feature mapper can extract camera data for pkl models
           engagement: latestEngagement,
+          // Supabase persistence context (server will save ML predictions + report)
+          childId: childProfile?.id || null,
+          assessmentId: assessmentId || null,
+          sessionIds: allSessions.map(s => s.id),
         }),
       });
 
@@ -190,39 +193,14 @@ export default function ReportPage() {
       setReportSource(data.source || 'local-ml');
 
       // Log the source
-      console.log('📊 Report generated via:', data.source);
-
-      // Save report to Supabase (non-blocking)
-      if (isSupabaseConfigured() && childProfile) {
-        const sessionIds = allSessions.map(s => s.id);
-        saveReport(
-          childProfile.id,
-          sessionIds,
-          reportData as unknown as DiagnosticReport,
-          data.source || 'local-ml'
-        ).then(saved => {
-          if (saved) console.log('✅ Report saved to Supabase');
-        }).catch(() => {
-          // Silently ignore - report still works locally
-        });
-      }
+      console.log('[Report] Generated via:', data.source);
+      // ML predictions are persisted server-side; no client save needed
     } catch (err) {
-      console.warn('API call failed, using local report:', err);
+      console.warn('[Report] API call failed, using local fallback:', err);
       // Use local fallback if API completely fails
       const fallbackReport = generateLocalReport(metrics);
       setReport(fallbackReport);
       setReportSource('local-ml');
-
-      // Still save fallback report to Supabase
-      if (isSupabaseConfigured() && childProfile) {
-        const sessionIds = allSessions.map(s => s.id);
-        await saveReport(
-          childProfile.id,
-          sessionIds,
-          fallbackReport as unknown as DiagnosticReport,
-          'local-ml'
-        ).catch(console.error);
-      }
     } finally {
       setLoading(false);
     }
