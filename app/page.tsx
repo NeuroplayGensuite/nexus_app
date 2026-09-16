@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { getAuthClient } from '@/lib/supabase/auth-client';
 
 const GAMES = [
   {
@@ -64,21 +65,60 @@ const GAMES = [
 ];
 
 export default function Home() {
-  const { childProfile, allSessions } = useSessionStore();
+  const { childProfile, setChildProfile, allSessions, resetAllSessions } = useSessionStore();
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Redirect to profile page if no profile exists, but ONLY after hydration
+  // Auto-load profile or redirect to creation
   useEffect(() => {
-    if (mounted && !childProfile) {
-      router.push('/profile');
+    if (!mounted) return;
+
+    const initProfile = async () => {
+      // If we already have a profile in state, we're good
+      if (childProfile) {
+        setIsInitializing(false);
+        return;
+      }
+
+      // Try to fetch existing profiles from Supabase for this logged-in user
+      try {
+        const { getAllChildren } = await import('@/lib/supabase/client');
+        const profiles = await getAllChildren();
+
+        if (profiles.length > 0) {
+          // Auto-load the most recent profile
+          setChildProfile(profiles[0]);
+        } else {
+          // No profiles exist, must create one
+          router.push('/profile');
+        }
+      } catch (err) {
+        console.warn('Failed to fetch profiles:', err);
+        router.push('/profile');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initProfile();
+  }, [mounted, childProfile, router, setChildProfile]);
+
+  const handleLogout = async () => {
+    try {
+      const supabase = getAuthClient();
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout failed:', err);
     }
-  }, [mounted, childProfile, router]);
+  };
 
   const completedGames = new Set(allSessions.map(s => s.gameType));
   const allGamesComplete = completedGames.size === 6;
@@ -108,10 +148,13 @@ export default function Home() {
   ];
 
   // Show loading while checking profile
-  if (!childProfile) {
+  if (isInitializing || !childProfile) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+          <div className="text-white text-lg font-medium">Loading your profile…</div>
+        </div>
       </main>
     );
   }
@@ -146,6 +189,12 @@ export default function Home() {
             }`}></span>
           {isSupabaseConfigured() ? '☁️ Cloud Synced' : '💾 Local Only'}
         </div>
+        <button
+          onClick={handleLogout}
+          className="glass-card px-4 py-2 rounded-full text-xs font-bold text-red-400 hover:text-red-300 transition-all border border-red-500/30 hover:border-red-400/60 cursor-pointer"
+        >
+          🚪 Sign Out
+        </button>
       </div>
 
       {/* Enhanced Header with Floating Animation */}
@@ -162,10 +211,22 @@ export default function Home() {
           🎮 Play • 🧪 Discover • 🚀 Grow
         </p>
         {childProfile && (
-          <div className="glass-card-strong inline-block px-8 py-4 rounded-2xl neon-glow-purple">
-            <p className="text-2xl font-black">
-              Welcome back, <span className="text-yellow-400 animate-pulse">{childProfile.name}</span>! ✨
-            </p>
+          <div className="flex flex-col items-center gap-4">
+            <div className="glass-card-strong inline-block px-8 py-4 rounded-2xl neon-glow-purple">
+              <p className="text-2xl font-black">
+                Welcome back, <span className="text-yellow-400 animate-pulse">{childProfile.name}</span>! ✨
+              </p>
+            </div>
+            
+            <button
+              onClick={() => {
+                resetAllSessions();
+                router.push('/profile');
+              }}
+              className="glass-card px-4 py-2 rounded-xl text-sm font-bold text-white hover:bg-white/10 transition-all border border-white/20 hover:border-white/40 cursor-pointer flex items-center gap-2"
+            >
+              <span>➕</span> Create New Profile
+            </button>
           </div>
         )}
         <div className="flex flex-wrap gap-3 justify-center mt-6">

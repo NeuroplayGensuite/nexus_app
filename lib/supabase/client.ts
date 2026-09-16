@@ -40,6 +40,7 @@ export interface DbChild {
   interests: string[];
   previous_concerns: string | null;
   preferred_language: 'en' | 'ml' | 'hi';
+  user_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -115,6 +116,9 @@ export async function saveChildProfile(profile: ChildProfile): Promise<DbChild |
     return null;
   }
 
+  // Get current user to link profile
+  const { data: { user } } = await supabase.auth.getUser();
+
   const dbChild = {
     id: profile.id,
     name: profile.name,
@@ -124,6 +128,7 @@ export async function saveChildProfile(profile: ChildProfile): Promise<DbChild |
     interests: profile.interests,
     previous_concerns: profile.previousConcerns || null,
     preferred_language: profile.preferredLanguage,
+    user_id: user?.id, // Link to auth user
   };
 
   const { data, error } = await supabase
@@ -157,13 +162,17 @@ export async function getChildProfile(childId: string): Promise<ChildProfile | n
 export async function getAllChildren(): Promise<ChildProfile[]> {
   if (!supabase) return [];
 
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return []; // Only fetch for logged-in users
+
   const { data, error } = await supabase
     .from('children')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
-  return (data as DbChild[]).map(dbChildToProfile);
+  return data.map(dbChildToProfile);
 }
 
 function dbChildToProfile(dbChild: DbChild): ChildProfile {

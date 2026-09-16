@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
+import { getAuthClient } from '@/lib/supabase/auth-client';
 
 const INTEREST_OPTIONS = [
   { emoji: '⚽', name: 'Football' },
@@ -42,6 +43,17 @@ export default function ProfilePage() {
       setInterests(interests.filter(i => i !== interest));
     } else if (interests.length < 5) {
       setInterests([...interests, interest]);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const supabase = getAuthClient();
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout failed:', err);
     }
   };
 
@@ -109,6 +121,16 @@ export default function ProfilePage() {
             }}
           />
         ))}
+      </div>
+
+      {/* Logout Button placed cleanly in the top right */}
+      <div className="absolute top-4 right-4 md:top-8 md:right-8 z-50">
+        <button
+          onClick={handleLogout}
+          className="glass-card px-4 py-2 rounded-full text-xs font-bold text-red-400 hover:text-red-300 transition-all border border-red-500/30 hover:border-red-400/60 cursor-pointer shadow-lg"
+        >
+          🚪 Sign Out
+        </button>
       </div>
 
       <div className="relative z-10 max-w-3xl mx-auto">
