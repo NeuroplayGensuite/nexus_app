@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# debug/scratch scripts (never commit these)
+test-*.js
+test-*.py
+rewrite_*.py
+debug-*.js
+*.scratch.*
